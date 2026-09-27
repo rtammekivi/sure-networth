@@ -1007,6 +1007,7 @@ function renderFooter() {
 }
 
 function render() {
+  tip.dataset.show = "false";
   document.body.classList.toggle("numbers-hidden", state.private);
   const ramp = RAW[isDark() ? "dark" : "light"];
   const { rows, total } = groupRows();

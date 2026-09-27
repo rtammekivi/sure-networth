@@ -2,6 +2,10 @@
 
 A net-worth allocation donut for [Sure](https://github.com/we-promise/sure), which has none: market → asset class → account → holding, with click-to-drill, a gross-assets / net-worth toggle, exclusions and a private mode that hides amounts but keeps percentages.
 
+![Demo: hovering, drilling from class to holdings, the market cut, the net-worth basis, excluding property and private mode](docs/demo.gif)
+
+The demo runs on made-up data in [`docs/demo-data.json`](docs/demo-data.json); regenerate it with `nix develop .#demo -c python3 docs/record-demo.py`.
+
 Every visitor signs in to Sure with their own account (OAuth, PKCE, `read` scope) and sees their own family's numbers. The server keeps no data, no keys and no sessions: the browser holds the token for the life of the tab and passes it along on each request, and the server fetches from Sure, computes, and forgets.
 
 ## How it works
@@ -21,8 +25,8 @@ browser ──Bearer──▶ sure-networth ──▶ Sure  (/api/v1 accounts, h
 
 Start it with only `SURE_URL` set and open it: with no client configured, `/` leads to onboarding, which walks through the steps below. With one configured, `/` goes straight to the Sure login.
 
-1. **Create a read-only OAuth client** in Sure at `/oauth/applications/new` (super-admin): redirect URI is this server's address with a trailing slash (`https://networth.example.com/`), *Confidential* unticked, scope `read`. Sure only redirects to https or loopback http.
-   Without super-admin access, onboarding can register one through Sure's public `/register`, but Sure grants those `read_write` only. Either narrow it on the Sure server —
+1. **Create a read-only OAuth client** in Sure at `/oauth/applications/new`. That page is open only to the instance's `super_admin` (the first account on the instance), not to family admins: redirect URI is this server's address with a trailing slash (`https://networth.example.com/`), *Confidential* unticked, scope `read`. Sure only redirects to https or loopback http.
+   Without `super_admin`, onboarding can register one through Sure's public `/register`, but Sure grants those `read_write` only. Either narrow it on the Sure server —
    `bin/rails runner 'Doorkeeper::Application.find_by!(uid: "<id>").update!(scopes: "read")'` — or set `SURE_OAUTH_SCOPE=read_write`.
 2. **Set `SURE_OAUTH_CLIENT_ID`** and restart.
 

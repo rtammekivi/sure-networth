@@ -1,0 +1,215 @@
+{
+ "as_of": "2026-09-25",
+ "generated_at": "2026-09-25T09:00:00Z",
+ "currency": "EUR",
+ "class_order": [
+  "Property",
+  "Equities",
+  "Pension",
+  "Bonds",
+  "Cash",
+  "Crypto",
+  "Other"
+ ],
+ "market_order": [
+  "Europe",
+  "United States",
+  "Global"
+ ],
+ "net_worth": 341200.0,
+ "assets": 522400,
+ "liabilities": 181200.0,
+ "leaves": [
+  {
+   "class": "Property",
+   "group": "Property",
+   "account": "Apartment",
+   "item": null,
+   "label": "Apartment",
+   "value": 320000,
+   "currency": "EUR",
+   "market": "Europe"
+  },
+  {
+   "class": "Equities",
+   "group": "Equities",
+   "account": "Brokerage",
+   "item": "AAPL",
+   "label": "Apple",
+   "value": 18400,
+   "currency": "USD",
+   "market": "United States"
+  },
+  {
+   "class": "Equities",
+   "group": "Equities",
+   "account": "Brokerage",
+   "item": "MSFT",
+   "label": "Microsoft",
+   "value": 15200,
+   "currency": "USD",
+   "market": "United States"
+  },
+  {
+   "class": "Equities",
+   "group": "Equities",
+   "account": "Brokerage",
+   "item": "NVDA",
+   "label": "NVIDIA",
+   "value": 9800,
+   "currency": "USD",
+   "market": "United States"
+  },
+  {
+   "class": "Equities",
+   "group": "Equities",
+   "account": "Brokerage",
+   "item": "VWCE",
+   "label": "Vanguard FTSE All-World",
+   "value": 24500,
+   "currency": "EUR",
+   "market": "Europe"
+  },
+  {
+   "class": "Equities",
+   "group": "Equities",
+   "account": "Brokerage",
+   "item": "ASML",
+   "label": "ASML Holding",
+   "value": 7600,
+   "currency": "EUR",
+   "market": "Europe"
+  },
+  {
+   "class": "Cash",
+   "group": "Brokerage cash",
+   "account": "Brokerage",
+   "item": null,
+   "label": "Brokerage cash",
+   "value": 2300,
+   "currency": "USD",
+   "market": "United States"
+  },
+  {
+   "class": "Equities",
+   "group": "Equities",
+   "account": "Index fund account",
+   "item": "IMEU",
+   "label": "iShares Core MSCI Europe",
+   "value": 12000,
+   "currency": "EUR",
+   "market": "Europe"
+  },
+  {
+   "class": "Bonds",
+   "group": "Bonds",
+   "account": "Bond account",
+   "item": "DE2030",
+   "label": "Bund 2030",
+   "value": 10000,
+   "currency": "EUR",
+   "market": "Europe"
+  },
+  {
+   "class": "Bonds",
+   "group": "Bonds",
+   "account": "Bond account",
+   "item": "IEAC",
+   "label": "Euro corporate bond fund",
+   "value": 6500,
+   "currency": "EUR",
+   "market": "Europe"
+  },
+  {
+   "class": "Cash",
+   "group": "Brokerage cash",
+   "account": "Bond account",
+   "item": null,
+   "label": "Bond account cash",
+   "value": 900,
+   "currency": "EUR",
+   "market": "Europe"
+  },
+  {
+   "class": "Pension",
+   "group": "Pension",
+   "account": "Workplace pension",
+   "item": null,
+   "label": "Workplace pension",
+   "value": 41000,
+   "currency": "EUR",
+   "market": "Europe"
+  },
+  {
+   "class": "Cash",
+   "group": "Current accounts",
+   "account": "Checking",
+   "item": null,
+   "label": "Checking",
+   "value": 6200,
+   "currency": "EUR",
+   "market": "Europe"
+  },
+  {
+   "class": "Cash",
+   "group": "Savings",
+   "account": "Savings",
+   "item": null,
+   "label": "Savings",
+   "value": 22000,
+   "currency": "EUR",
+   "market": "Europe"
+  },
+  {
+   "class": "Crypto",
+   "group": "Crypto",
+   "account": "Exchange",
+   "item": "CRYPTO:BTC",
+   "label": "Bitcoin",
+   "value": 8900,
+   "currency": "EUR",
+   "market": "Global"
+  },
+  {
+   "class": "Crypto",
+   "group": "Crypto",
+   "account": "Exchange",
+   "item": "CRYPTO:ETH",
+   "label": "Ether",
+   "value": 3100,
+   "currency": "EUR",
+   "market": "Global"
+  },
+  {
+   "class": "Other",
+   "group": "Vehicles",
+   "account": "Car",
+   "item": null,
+   "label": "Car",
+   "value": 14000,
+   "currency": "EUR",
+   "market": "Europe"
+  }
+ ],
+ "liability_accounts": [
+  {
+   "name": "Mortgage",
+   "nets_against": "Apartment",
+   "value": 180000.0
+  },
+  {
+   "name": "Credit card",
+   "nets_against": null,
+   "value": 1200.0
+  }
+ ],
+ "fx": [
+  "1 USD = 0.88000 EUR (Sure)"
+ ],
+ "reconcile": {
+  "leaf_total": 522400,
+  "api_total": 522400,
+  "delta": 0.0
+ },
+ "warnings": []
+}

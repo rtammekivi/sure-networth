@@ -95,7 +95,8 @@
   <ol>
     <li>
       <h2>Create a read-only OAuth client in Sure</h2>
-      <p>Sure's application admin needs a super-admin login. Open it and fill in:</p>
+      <p>Sure's OAuth application admin is open only to the instance's <code>super_admin</code> (the account
+        that set Sure up), not to family admins. Open it and fill in:</p>
       <table>
         <tr><th>Name</th><td><code>Net worth allocation</code></td></tr>
         <tr><th>Redirect URI</th><td><code id="redirect"></code></td></tr>
@@ -108,7 +109,7 @@
       <p>After you save, Sure shows the client's <strong>UID</strong>. That is the client id.</p>
 
       <details>
-        <summary>No super-admin access?</summary>
+        <summary>Not the instance's super_admin?</summary>
         <p>Anyone can register a client, but Sure grants it <code>read_write</code> only. The page asks for
           <code>read</code>, so sign-in fails with “The requested scope is invalid” until someone with access to
           the Sure server narrows the client, or you set <code>SURE_OAUTH_SCOPE=read_write</code> and accept a
