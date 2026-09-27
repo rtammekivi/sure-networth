@@ -68,7 +68,8 @@ The file is **re-read whenever it changes**; no restart. A file that fails to pa
 
 ```sh
 # docker
-SURE_URL=https://sure.example.com docker compose up -d --build   # http://127.0.0.1:8732, mapping in ./config/mapping.json
+SURE_URL=https://sure.example.com NETWORTH_CONFIG_DIR=~/.config/sure-networth \
+  docker compose up -d --build   # http://127.0.0.1:8732, reads $NETWORTH_CONFIG_DIR/mapping.json
 
 # helm
 helm install sure-networth oci://ghcr.io/rtammekivi/sure-networth/sure-networth-chart \

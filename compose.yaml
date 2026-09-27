@@ -12,7 +12,7 @@ services:
       TZ: ${TZ:-UTC}
       RUST_LOG: ${RUST_LOG:-sure_networth=info}
     volumes:
-      - ./config:/config:ro
+      - ${NETWORTH_CONFIG_DIR:-./examples}:/config:ro
     healthcheck:
       test: ["CMD", "sure-networth", "healthcheck"]
       interval: 10s
