@@ -1,0 +1,110 @@
+# Stateless: every request carries the visitor's own Sure token.
+replicaCount: 1
+
+image:
+  repository: ghcr.io/rtammekivi/sure-networth
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: networth.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+httpRoute:
+  enabled: false
+  apiVersion: gateway.networking.k8s.io/v1
+  annotations: {}
+  # Required when enabled, e.g. [{name: my-gateway, namespace: infra}].
+  parentRefs: []
+  hostnames: []
+  matches:
+    - path:
+        type: PathPrefix
+        value: /
+  filters: []
+  timeouts: {}
+
+sure:
+  # Base URL of the Sure instance, as browsers reach it.
+  url: ""
+  # OAuth client id. Left empty, the page walks through creating one.
+  oauthClientId: ""
+  scope: read
+
+# Account-to-class mapping. Rendered into a ConfigMap and re-read by the
+# server whenever it changes, so `helm upgrade` applies it without a restart.
+mapping:
+  accounts: {}
+  #   "Broker":       { class: Equities, cash: split }
+  #   "Broker bonds": { class: Bonds, cash: split }
+  #   "Pension":      { class: Pension }
+  #   "Flat":         { class: Property }
+  #   "Current":      { class: Cash, group: Current accounts }
+  netting: {}
+  #   "Mortgage": "Flat"
+  # Use a ConfigMap you manage instead; it must hold mapping.json.
+  existingConfigMap: ""
+
+timezone: UTC
+logLevel: sure_networth=info
+
+extraEnv: []
+
+resources: {}
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 2
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 2
+  periodSeconds: 10
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

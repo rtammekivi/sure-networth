@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up · Net worth allocation</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --surface-1: #fcfcfb;
+    --plane: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --border: rgba(11, 11, 11, .10);
+    --wash: rgba(11, 11, 11, .04);
+    --accent: #2a78d6;
+    --warn: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface-1: #1a1a19;
+      --plane: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --border: rgba(255, 255, 255, .10);
+      --wash: rgba(255, 255, 255, .06);
+      --accent: #3987e5;
+      --warn: #f59e0b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 48px 24px 64px;
+    background: var(--plane); color: var(--text-primary);
+    font: 14px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  .lede { color: var(--text-secondary); margin: 0 0 28px; }
+  ol { list-style: none; padding: 0; margin: 0; counter-reset: step; display: flex; flex-direction: column; gap: 16px; }
+  li {
+    counter-increment: step; position: relative;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px 24px 20px 64px;
+  }
+  li::before {
+    content: counter(step); position: absolute; left: 22px; top: 18px;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--wash); font-weight: 600; font-size: 13px;
+  }
+  h2 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+  p { margin: 6px 0; color: var(--text-secondary); }
+  code { font: 12.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+  pre {
+    margin: 10px 0 0; padding: 12px 14px; overflow-x: auto;
+    background: var(--wash); border-radius: 8px;
+  }
+  button {
+    appearance: none; border: 1px solid var(--border); background: var(--accent); color: #fff;
+    border-radius: 8px; padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; margin-top: 8px;
+  }
+  a.button {
+    display: inline-block; margin-top: 8px; padding: 8px 14px; border-radius: 8px;
+    background: var(--accent); color: #fff; font-weight: 600; text-decoration: none;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; color: var(--text-secondary); }
+  table { border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  th { text-align: left; font-weight: 500; color: var(--text-muted); padding: 4px 16px 4px 0; vertical-align: top; }
+  td { padding: 4px 0; }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  .row button { margin-top: 0; }
+  input {
+    flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+    font: 12.5px ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .result { margin-top: 10px; font-size: 13px; }
+  .warn { color: var(--warn); }
+  .ok { color: var(--text-primary); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Set up the net worth page</h1>
+  <p class="lede">
+    Every visitor signs in to <strong id="sureUrl">Sure</strong> with their own account and sees their own
+    family's numbers. This server stores no data and no keys; it only needs to know which OAuth client to use.
+  </p>
+
+  <ol>
+    <li>
+      <h2>Create a read-only OAuth client in Sure</h2>
+      <p>Sure's application admin needs a super-admin login. Open it and fill in:</p>
+      <table>
+        <tr><th>Name</th><td><code>Net worth allocation</code></td></tr>
+        <tr><th>Redirect URI</th><td><code id="redirect"></code></td></tr>
+        <tr><th>Confidential</th><td>unticked — the page is a public client using PKCE</td></tr>
+        <tr><th>Scopes</th><td><code>read</code></td></tr>
+      </table>
+      <p class="warn" id="redirectWarn" hidden>This address is neither https nor loopback, and Sure only
+        redirects to those. Reach this page at the address users will use, behind TLS, before creating the client.</p>
+      <a class="button" id="sureNew" target="_blank" rel="noopener">Open Sure's new-application page</a>
+      <p>After you save, Sure shows the client's <strong>UID</strong>. That is the client id.</p>
+
+      <details>
+        <summary>No super-admin access?</summary>
+        <p>Anyone can register a client, but Sure grants it <code>read_write</code> only. The page asks for
+          <code>read</code>, so sign-in fails with “The requested scope is invalid” until someone with access to
+          the Sure server narrows the client, or you set <code>SURE_OAUTH_SCOPE=read_write</code> and accept a
+          write-capable token.</p>
+        <button type="button" id="register">Register client</button>
+        <div class="result" id="registerResult"></div>
+        <p>To narrow it, on the Sure server:</p>
+        <pre><code id="narrow"></code></pre>
+      </details>
+    </li>
+
+    <li>
+      <h2>Check the client id</h2>
+      <p>Paste the UID and check that Sure knows it.</p>
+      <div class="row">
+        <input type="text" id="clientId" placeholder="client id" autocomplete="off" spellcheck="false">
+        <button type="button" id="verify">Check</button>
+      </div>
+      <div class="result" id="verifyResult"></div>
+    </li>
+
+    <li>
+      <h2>Configure and restart</h2>
+      <p>Set the client id and restart this server. This page is then replaced by the Sure login.</p>
+      <pre><code id="envs"></code></pre>
+    </li>
+
+    <li>
+      <h2>Optional: map accounts to asset classes</h2>
+      <p>Sure has no asset class on accounts or securities, so accounts fall back to their type
+        (depository → Cash, investment → Equities, …). A JSON file named by <code>NETWORTH_MAPPING</code>
+        assigns classes, splits brokerage cash and nets loans against what they financed. It is re-read
+        whenever it changes — no restart.</p>
+      <pre><code>{
+  "accounts": {
+    "Broker bonds":  { "class": "Bonds", "cash": "split" },
+    "Pension":       { "class": "Pension" },
+    "Flat":          { "class": "Property" },
+    "Current":       { "class": "Cash", "group": "Current accounts" }
+  },
+  "netting": { "Mortgage": "Flat" }
+}</code></pre>
+    </li>
+  </ol>
+</div>
+
+<script>
+const redirect = location.origin + "/";
+const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+let sureUrl = "https://sure.example.com";
+
+function fill(clientId) {
+  const id = clientId || "<client-id>";
+  document.getElementById("sureNew").href = `${sureUrl}/oauth/applications/new`;
+  document.getElementById("narrow").textContent =
+`bin/rails runner 'Doorkeeper::Application.find_by!(uid: "${id}").update!(scopes: "read")'`;
+  document.getElementById("envs").textContent =
+`# docker
+SURE_OAUTH_CLIENT_ID=${id}
+
+# helm
+helm upgrade --install sure-networth oci://ghcr.io/rtammekivi/sure-networth/sure-networth-chart \\
+  --set sure.url=${sureUrl} --set sure.oauthClientId=${id}`;
+}
+
+async function register() {
+  const btn = document.getElementById("register");
+  const out = document.getElementById("registerResult");
+  btn.disabled = true;
+  out.className = "result";
+  out.textContent = "Registering…";
+  try {
+    const res = await fetch("api/onboarding/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ redirect_uri: redirect })
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.client_id) throw new Error(body.error_description || body.error || `HTTP ${res.status}`);
+    out.className = "result ok";
+    out.textContent = `Registered. Client id: ${body.client_id}`;
+    document.getElementById("clientId").value = body.client_id;
+    fill(body.client_id);
+  } catch (e) {
+    out.className = "result warn";
+    out.textContent = `Registration failed: ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("redirect").textContent = redirect;
+document.getElementById("redirectWarn").hidden = location.protocol === "https:" || loopback;
+async function verify() {
+  const id = document.getElementById("clientId").value.trim();
+  const out = document.getElementById("verifyResult");
+  if (!id) return;
+  out.className = "result";
+  out.textContent = "Checking…";
+  try {
+    const res = await fetch("api/onboarding/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: id })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const { known } = await res.json();
+    out.className = known ? "result ok" : "result warn";
+    out.textContent = known
+      ? "Sure knows this client. Its redirect URI and scope are checked on first sign-in."
+      : "Sure does not know this client id.";
+    if (known) fill(id);
+  } catch (e) {
+    out.className = "result warn";
+    out.textContent = `Check failed: ${e.message}`;
+  }
+}
+
+document.getElementById("register").addEventListener("click", register);
+document.getElementById("verify").addEventListener("click", verify);
+document.getElementById("clientId").addEventListener("keydown", (e) => { if (e.key === "Enter") verify(); });
+fill();
+fetch("config.json").then((r) => r.json()).then((c) => {
+  if (c.client_id) return location.replace("./");
+  sureUrl = c.sure_url;
+  document.getElementById("sureUrl").textContent = sureUrl;
+  fill();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: fmt
+        run: cargo fmt --all -- --check
+
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: test
+        run: cargo test --all
+
+  chart:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: azure/setup-helm@v5
+
+      - name: lint
+        run: helm lint charts/sure-networth-chart --set sure.url=https://sure.example.com
+
+      - name: template
+        run: |
+          helm template ci charts/sure-networth-chart \
+            --set sure.url=https://sure.example.com \
+            --set sure.oauthClientId=ci \
+            --set ingress.enabled=true \
+            --set-json 'mapping.accounts={"Broker":{"class":"Bonds","cash":"split"}}' \
+            --set-json 'mapping.netting={"Mortgage":"Flat"}' > /dev/null
+
+  image:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          cache-from: type=gha,scope=ci
+          cache-to: type=gha,mode=max,scope=ci

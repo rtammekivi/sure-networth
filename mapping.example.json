@@ -1,0 +1,12 @@
+{
+  "accounts": {
+    "Current":       { "class": "Cash", "group": "Current accounts" },
+    "Broker":        { "class": "Equities", "cash": "split" },
+    "Broker bonds":  { "class": "Bonds", "cash": "split" },
+    "Pension":       { "class": "Pension" },
+    "Flat":          { "class": "Property" }
+  },
+  "netting": {
+    "Mortgage": "Flat"
+  }
+}

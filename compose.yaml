@@ -1,0 +1,22 @@
+services:
+  sure-networth:
+    build: .
+    ports:
+      - "127.0.0.1:8732:8080"
+    stop_grace_period: 5s
+    environment:
+      SURE_URL: ${SURE_URL:?set SURE_URL}
+      SURE_OAUTH_CLIENT_ID: ${SURE_OAUTH_CLIENT_ID:-}
+      SURE_OAUTH_SCOPE: ${SURE_OAUTH_SCOPE:-read}
+      NETWORTH_MAPPING: /config/mapping.json
+      TZ: ${TZ:-UTC}
+      RUST_LOG: ${RUST_LOG:-sure_networth=info}
+    volumes:
+      - ./config:/config:ro
+    healthcheck:
+      test: ["CMD", "sure-networth", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped

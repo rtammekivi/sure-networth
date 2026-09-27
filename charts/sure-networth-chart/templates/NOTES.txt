@@ -1,0 +1,24 @@
+sure-networth {{ .Chart.AppVersion }} is installed as {{ include "sure-networth.fullname" . }}.
+
+{{- $url := include "sure-networth.publicUrl" . }}
+{{- if $url }}
+
+Open {{ $url }}/
+{{- else }}
+
+Reach it locally with:
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "sure-networth.fullname" . }} 8080:{{ .Values.service.port }}
+
+then open http://localhost:8080/
+{{- end }}
+
+{{- if not .Values.sure.oauthClientId }}
+
+No OAuth client is configured, so the page opens on onboarding: create a
+read-only client in Sure with redirect URI {{ $url | default "http://localhost:8080" }}/
+and set sure.oauthClientId.
+{{- else }}
+
+The OAuth client must allow the redirect URI {{ $url | default "http://localhost:8080" }}/ exactly.
+{{- end }}

@@ -1,0 +1,233 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to rebuild (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release-please:
+    runs-on: ubuntu-26.04
+    if: github.event_name == 'push'
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  setup:
+    needs: release-please
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-26.04
+    outputs:
+      build: ${{ steps.target.outputs.build }}
+      tag: ${{ steps.target.outputs.tag }}
+    steps:
+      - id: target
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+          RELEASE_CREATED: ${{ needs.release-please.outputs.release_created }}
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          if [ -n "$DISPATCH_TAG" ]; then
+            tag="$DISPATCH_TAG"
+          elif [ "$RELEASE_CREATED" = "true" ]; then
+            tag="$RELEASE_TAG"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "build=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  # Each arch builds on its own native runner — no QEMU, so the arm64 build
+  # is as fast as the amd64 one. Each pushes a digest only; the merge job
+  # below assembles them into one multi-arch tag.
+  image:
+    name: image (${{ matrix.arch }})
+    needs: setup
+    if: needs.setup.outputs.build == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.tag }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+
+      - name: export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: image (manifest)
+    needs: [setup, image]
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.setup.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.setup.outputs.tag }}
+            type=raw,value=latest
+
+      - name: create manifest list
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<<"$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+
+      - name: inspect
+        run: |
+          docker buildx imagetools inspect \
+            ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
+
+  chart:
+    needs: [setup, merge]
+    if: needs.setup.outputs.build == 'true'
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.tag }}
+
+      - uses: azure/setup-helm@v5
+
+      - name: package
+        run: helm package charts/sure-networth-chart --destination dist
+
+      - name: push
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          echo "$GHCR_TOKEN" | helm registry login ghcr.io -u "$ACTOR" --password-stdin
+          helm push dist/sure-networth-chart-*.tgz "oci://ghcr.io/${{ github.repository }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: chart
+          path: dist/*.tgz
+          if-no-files-found: error
+
+  assets:
+    needs: [setup, merge, chart]
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          name: chart
+
+      - name: upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.setup.outputs.tag }}
+        run: gh release upload "$TAG" dist/*.tgz --clobber
+
+      - name: append install notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.setup.outputs.tag }}
+          IMAGE: ghcr.io/${{ github.repository }}
+          CHART: ghcr.io/${{ github.repository }}/sure-networth-chart
+          BASE: ${{ github.server_url }}/${{ github.repository }}/releases/download
+        run: |
+          version="${TAG#v}"
+          gh release view "$TAG" --json body -q .body > notes.md
+          if grep -qF '<!-- install -->' notes.md; then
+            echo "install section already present"
+            exit 0
+          fi
+          cat >> notes.md <<EOF
+
+          <!-- install -->
+          ## Install
+
+          \`\`\`sh
+          docker pull ${IMAGE}:${version}
+
+          helm install sure-networth oci://${CHART} --version ${version} \\
+            --set sure.url=https://sure.example.com
+          \`\`\`
+
+          | | |
+          | --- | --- |
+          | container | \`${IMAGE}:${version}\` |
+          | chart | \`oci://${CHART}\` · [sure-networth-chart-${version}.tgz](${BASE}/${TAG}/sure-networth-chart-${version}.tgz) |
+          EOF
+          gh release edit "$TAG" --notes-file notes.md

@@ -1,0 +1,1146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Net worth allocation</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --plane: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11, 11, 11, .10);
+    --wash: rgba(11, 11, 11, .04);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #4a3aa7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --plane: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255, 255, 255, .10);
+      --wash: rgba(255, 255, 255, .06);
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --series-4: #c98500;
+      --series-5: #d55181;
+      --series-6: #008300;
+      --series-7: #9085e9;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --plane: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, .10);
+    --wash: rgba(255, 255, 255, .06);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+  }
+
+  * { box-sizing: border-box; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  body {
+    margin: 0;
+    padding: 32px 24px 64px;
+    background: var(--plane);
+    color: var(--text-primary);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; }
+  .as-of { color: var(--text-muted); font-size: 13px; }
+  .spacer { flex: 1; }
+
+  .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface-1); }
+  .seg button {
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    font: inherit; font-size: 13px; color: var(--text-secondary);
+    padding: 6px 12px;
+  }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button:hover { background: var(--wash); }
+  .seg button[aria-pressed="true"] { background: var(--wash); color: var(--text-primary); font-weight: 600; }
+  .seg[hidden] { display: none; }
+  .ctl-label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+
+  /* Sits at the right end of the controls row, under the theme switcher. Same
+     box as a .seg button so the two right-hand controls line up. */
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; padding: 0;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface-1); color: var(--text-secondary);
+    cursor: pointer; font: inherit;
+  }
+  .icon-btn:hover { background: var(--wash); color: var(--text-primary); }
+  .icon-btn[aria-pressed="true"] { background: var(--wash); color: var(--text-primary); }
+  .icon-btn svg { width: 18px; height: 18px; display: block; }
+  .icon-btn .icon-off, .icon-btn[aria-pressed="true"] .icon-on { display: none; }
+  .icon-btn[aria-pressed="true"] .icon-off { display: block; }
+
+  .hero-block { margin-bottom: 20px; }
+  .hero-block .k { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+  .hero-block .hero { font-size: 48px; font-weight: 600; line-height: 1.1; letter-spacing: -.02em; margin-top: 4px; }
+  .hero-block .sub { font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
+
+  .crumbs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
+  .crumbs button {
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    font: inherit; color: var(--text-secondary); padding: 2px 4px; border-radius: 4px;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .crumbs button:hover { background: var(--wash); color: var(--text-primary); }
+  .crumbs .sep { color: var(--text-muted); }
+  .crumbs .current { color: var(--text-primary); font-weight: 600; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+  }
+  .panel { display: flex; gap: 32px; align-items: center; flex-wrap: wrap; }
+
+  .chart { position: relative; width: 340px; height: 340px; flex: 0 0 auto; margin: 0 auto; }
+  .chart svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .chart path.seg-arc { transition: d .18s ease; cursor: pointer; }
+  .chart path.seg-arc:focus-visible { outline: none; }
+  .chart g.seg:focus-visible path.seg-arc { stroke: var(--text-primary); stroke-width: 1.5; }
+
+  .center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    pointer-events: none; padding: 0 68px;
+  }
+  .center .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 5px; }
+  .center .val { font-size: 24px; font-weight: 600; line-height: 1.15; letter-spacing: -.01em; }
+  .center .sub { font-size: 12px; color: var(--text-secondary); margin-top: 5px; }
+
+  .legend { flex: 1 1 300px; min-width: 280px; max-width: 440px; display: flex; flex-direction: column; gap: 2px; }
+  .legend-row { display: flex; align-items: center; border-radius: 8px; }
+  .legend-row:hover, .legend-row.hot { background: var(--wash); }
+  .legend-main {
+    display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
+    padding: 8px 4px 8px 10px; border: 0; background: transparent;
+    font: inherit; text-align: left; cursor: pointer; color: inherit;
+  }
+  .legend-main[data-leaf="true"] { cursor: default; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+  .legend-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend-val { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .legend-pct { width: 52px; text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .legend-x {
+    flex: 0 0 auto; width: 26px; height: 26px; margin-right: 6px; padding: 0;
+    border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+    color: var(--text-muted); font: inherit; font-size: 15px; line-height: 1;
+    opacity: 0; transition: opacity .12s ease;
+  }
+  .legend-row:hover .legend-x, .legend-x:focus-visible, .legend-row.off .legend-x { opacity: 1; }
+  .legend-x:hover { background: var(--wash); color: var(--text-primary); }
+
+  .off .legend-name, tr.off td.name span:not(.swatch) { text-decoration: line-through; }
+  .off .legend-name, .off .legend-val, .off .legend-pct, tr.off td { color: var(--text-muted); }
+  .off .swatch { opacity: .35; }
+
+  .excl-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 12px; padding: 8px 12px; border-radius: 8px;
+    background: var(--wash); font-size: 13px; color: var(--text-secondary);
+  }
+  .excl-bar[hidden] { display: none; }
+  .excl-bar button {
+    appearance: none; border: 1px solid var(--border); background: var(--surface-1);
+    border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 12px;
+    color: var(--text-primary); cursor: pointer;
+  }
+  .excl-bar button:hover { background: var(--wash); }
+  td.pick, th.pick { width: 34px; padding-right: 0; }
+  td.pick input { cursor: pointer; }
+
+  .tip {
+    position: fixed; z-index: 10; pointer-events: none; opacity: 0;
+    transition: opacity .12s ease;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 11px; min-width: 140px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .12);
+  }
+  .tip[data-show="true"] { opacity: 1; }
+  .tip .v { font-size: 16px; font-weight: 600; }
+  .tip .n { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+  .tip .key { width: 12px; height: 2px; border-radius: 1px; flex: 0 0 auto; }
+
+  section.table-view { margin-top: 24px; }
+  h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 9px 10px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--baseline); }
+  tbody tr + tr td { border-top: 1px solid var(--gridline); }
+  tbody td.num { font-variant-numeric: tabular-nums; }
+  tbody td.name { display: flex; align-items: center; gap: 9px; }
+  tbody td .sub { color: var(--text-muted); font-size: 12px; }
+  tfoot td { border-top: 1px solid var(--baseline); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .table-scroll { overflow-x: auto; }
+
+  /* Private mode is for eyes on the screen — someone beside you, a screenshot,
+     a shared window. Rendered digits are replaced rather than blurred, so there
+     is nothing to deblur out of an image, but the payload still sits in the
+     page source: this is not a barrier against anyone who can open devtools.
+     The class only fades — it is the masking that hides. */
+  .money { transition: opacity .12s ease; }
+  body.numbers-hidden .money { opacity: .42; user-select: none; -webkit-user-select: none; }
+  @media (prefers-reduced-motion: reduce) { .money { transition: none; } }
+
+  .gate { max-width: 1080px; margin: 20vh auto 0; text-align: center; color: var(--text-secondary); }
+  .gate button {
+    appearance: none; border: 1px solid var(--border); background: var(--surface-1);
+    border-radius: 8px; padding: 8px 16px; font: inherit; color: var(--text-primary); cursor: pointer;
+  }
+  .gate button:hover { background: var(--wash); }
+
+  footer { margin-top: 24px; font-size: 12px; color: var(--text-muted); }
+  footer p { margin: 4px 0; }
+  .warn { color: var(--text-secondary); }
+  .warn::before { content: "! "; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="gate" id="gate" role="status">
+  <p id="gateMsg">Loading…</p>
+  <button type="button" id="signIn" hidden>Sign in with Sure</button>
+</div>
+<div class="wrap" id="app" hidden>
+  <header>
+    <h1>Net worth allocation</h1>
+    <span class="as-of" id="asOf"></span>
+    <span class="spacer"></span>
+    <div class="seg" role="group" aria-label="Theme">
+      <button type="button" data-theme-set="light">Light</button>
+      <button type="button" data-theme-set="auto" aria-pressed="true">Auto</button>
+      <button type="button" data-theme-set="dark">Dark</button>
+    </div>
+    <div class="seg" id="signOutBox" hidden>
+      <button type="button" id="signOut">Sign out</button>
+    </div>
+  </header>
+
+  <div class="controls">
+    <span class="ctl-label">Basis</span>
+    <div class="seg" role="group" aria-label="Basis">
+      <button type="button" data-mode="assets" aria-pressed="true">Gross assets</button>
+      <button type="button" data-mode="net">Net worth</button>
+    </div>
+    <span class="ctl-label" style="margin-left:8px">Granularity</span>
+    <div class="seg" role="group" aria-label="Granularity">
+      <button type="button" data-level="market">Market</button>
+      <button type="button" data-level="class" aria-pressed="true">Class</button>
+      <button type="button" data-level="account">Account</button>
+      <button type="button" data-level="item">Holding</button>
+    </div>
+    <span class="spacer"></span>
+    <button type="button" id="privToggle" class="icon-btn" aria-pressed="false"
+            title="Hide amounts, keep percentages (H)" aria-label="Hide amounts, keep percentages">
+      <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/>
+        <circle cx="12" cy="12" r="2.6"/>
+      </svg>
+      <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9.9 5.7A10.6 10.6 0 0 1 12 5.5c6.4 0 10 6.5 10 6.5a18 18 0 0 1-3.4 4.2M6.5 7.8A18 18 0 0 0 2 12s3.6 6.5 10 6.5a10.9 10.9 0 0 0 4.2-.8"/>
+        <path d="M10.2 10.2a2.6 2.6 0 0 0 3.6 3.6"/>
+        <path d="M3 3l18 18"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="hero-block">
+    <div class="k" id="heroKey"></div>
+    <div class="hero" id="heroVal"></div>
+    <div class="sub" id="heroSub"></div>
+  </div>
+
+  <nav class="crumbs" id="crumbs" aria-label="Drill-down"></nav>
+
+  <div class="excl-bar" id="exclBar" hidden>
+    <span id="exclText"></span>
+    <button type="button" id="exclReset">Show all</button>
+  </div>
+
+  <div class="card">
+    <div class="panel">
+      <div class="chart">
+        <svg id="donut" viewBox="0 0 200 200" role="img" aria-labelledby="donutTitle"><title id="donutTitle">Allocation donut</title></svg>
+        <div class="center">
+          <div class="k" id="centerKey"></div>
+          <div class="val" id="centerVal"></div>
+          <div class="sub" id="centerSub"></div>
+        </div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+
+  <section class="table-view">
+    <h2 id="tableCaption">Breakdown</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col" class="pick"><span class="sr-only">Include</span></th>
+            <th scope="col">Name</th>
+            <th scope="col">Value</th>
+            <th scope="col">Share here</th>
+            <th scope="col">Share of total</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+        <tfoot id="tfoot"></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <footer id="footer"></footer>
+</div>
+
+<div class="tip" id="tip" role="status" aria-live="polite">
+  <div class="v"></div>
+  <div class="n"><span class="key"></span><span class="nm"></span></div>
+</div>
+
+<script>
+const BAKED = /*__DATA__*/null;
+let CONFIG = null;
+let DATA;
+
+const SLOTS = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)",
+               "var(--series-5)", "var(--series-6)", "var(--series-7)"];
+const RAW = {
+  light: ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7"],
+  dark:  ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9"]
+};
+const OTHER_SLOT = 6;
+const MAX_SEGMENTS = 7;
+const MIN_SHARE = 0.0075;
+
+// Market heads the chain rather than sitting beside it: it is the coarsest cut
+// of the same leaves, so drilling a market lands on the classes inside it. The
+// chain is walked by name, not by position, because picking "Class" at the root
+// skips market entirely and the path then starts one level in.
+const LEVELS = ["market", "class", "account", "item"];
+const depthOf = (level) => LEVELS.indexOf(level);
+const LEVEL_NAME = { market: "Market", class: "Asset class", account: "Account", item: "Holding" };
+const LEVEL_PLURAL = { market: "Markets", class: "Asset classes", account: "Accounts", item: "Holdings" };
+
+const STORE_KEY = "sure-networth:excluded";
+const PRIVATE_KEY = "sure-networth:private";
+const state = { mode: "assets", level: "class", path: [], excluded: new Set(), private: false };
+
+// Exclusions are stored as "<level>::<value>", not as row references, so one
+// taken at class level still bites after drilling to accounts or holdings, and
+// survives a basis toggle.
+function leafKeys(leaf) { return [`market::${leaf.market}`, `class::${leaf.class}`, `account::${leaf.account}`, `item::${leaf.label}`]; }
+function leafExcluded(leaf) { return leafKeys(leaf).some((k) => state.excluded.has(k)); }
+
+function loadExclusions() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) state.excluded = new Set(JSON.parse(raw));
+  } catch { /* file:// or blocked storage — exclusions just don't persist */ }
+}
+function saveExclusions() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify([...state.excluded])); } catch { /* ignore */ }
+}
+
+function loadPrivate() {
+  try { state.private = localStorage.getItem(PRIVATE_KEY) === "1"; } catch { /* ignore */ }
+}
+function savePrivate() {
+  try { localStorage.setItem(PRIVATE_KEY, state.private ? "1" : "0"); } catch { /* ignore */ }
+}
+
+let money, money2;
+const pct = (x) => (x * 100).toFixed(1) + "%";
+
+// Every currency figure goes through m()/m2(). In private mode the digits are
+// swapped for bullets of the same width, so the column stays aligned and the
+// real value never reaches the DOM — the grouping separators and the currency
+// symbol survive, which is what still makes it read as an amount.
+const m  = (v) => mask(money.format(v));
+const m2 = (v) => mask(money2.format(v));
+function mask(s) { return state.private ? s.replace(/\d/g, "•") : s; }
+
+// Marks an element as carrying a bare amount, which is what the fade targets.
+// Amounts inside a sentence are masked but not faded — fading the whole line
+// would take the words with it. classList keeps this idempotent: the donut
+// centre runs through here on every hover.
+function amount(el, text) { el.classList.add("money"); el.textContent = text; return el; }
+
+/* ---- Sure -------------------------------------------------------------- */
+
+const TOKEN_KEY = "sure-networth:token";
+const AUTH_KEY = "sure-networth:auth";
+
+const redirectUri = () => location.origin + location.pathname;
+const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)))
+  .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+async function signIn() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const nonce = b64url(crypto.getRandomValues(new Uint8Array(16)));
+  const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  sessionStorage.setItem(AUTH_KEY, JSON.stringify({ verifier, nonce }));
+  const q = new URLSearchParams({
+    response_type: "code", client_id: CONFIG.client_id, redirect_uri: redirectUri(), scope: CONFIG.scope,
+    state: nonce, code_challenge: challenge, code_challenge_method: "S256"
+  });
+  location.assign(`${CONFIG.sure_url}/oauth/authorize?${q}`);
+}
+
+async function signOut() {
+  const tok = sessionStorage.getItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  if (tok) {
+    await fetch(`${CONFIG.sure_url}/oauth/revoke`, {
+      method: "POST", body: new URLSearchParams({ token: tok, client_id: CONFIG.client_id })
+    }).catch(() => {});
+  }
+  location.replace(redirectUri() + "?signed_out");
+}
+
+async function exchangeCode(q) {
+  history.replaceState(null, "", redirectUri());
+  const pending = JSON.parse(sessionStorage.getItem(AUTH_KEY) || "null");
+  sessionStorage.removeItem(AUTH_KEY);
+  if (q.has("error")) throw new Error(q.get("error_description") || q.get("error"));
+  if (!pending || pending.nonce !== q.get("state")) throw new Error("Sign-in state did not match.");
+  const res = await fetch(`${CONFIG.sure_url}/oauth/token`, {
+    method: "POST",
+    body: new URLSearchParams({
+      grant_type: "authorization_code", code: q.get("code"), redirect_uri: redirectUri(),
+      client_id: CONFIG.client_id, code_verifier: pending.verifier
+    })
+  });
+  if (!res.ok) throw new Error(`Sure refused the sign-in (${res.status}).`);
+  const tok = (await res.json()).access_token;
+  sessionStorage.setItem(TOKEN_KEY, tok);
+  return tok;
+}
+
+/* ---- data shaping ------------------------------------------------------ */
+
+// Netting turns "gross assets" into "net worth": a mortgage comes off the
+// property it financed, pro-rata across that account's leaves.
+function leaves() {
+  const rows = DATA.leaves.map((l) => ({ ...l }));
+  if (state.mode !== "net") return rows;
+  for (const liab of DATA.liability_accounts) {
+    if (!liab.nets_against) continue;
+    const target = rows.filter((r) => r.account === liab.nets_against);
+    const sum = target.reduce((a, r) => a + r.value, 0);
+    if (sum <= 0) continue;
+    for (const r of target) r.value -= liab.value * (r.value / sum);
+  }
+  return rows;
+}
+
+function unmatchedLiabilities() {
+  return DATA.liability_accounts.filter((l) => !l.nets_against);
+}
+
+function filtered(rows) {
+  return rows.filter((r) => state.path.every((p) => r[p.level] === p.value));
+}
+
+// Colour follows the entity: slots are handed out in an order computed from
+// gross assets, so toggling the basis or drilling in never repaints a segment.
+function canonicalOrder(key) {
+  if (key === "class") return DATA.class_order;
+  if (key === "market") return DATA.market_order;
+  const base = filtered(DATA.leaves.map((l) => ({ ...l })));
+  const totals = new Map();
+  for (const r of base) totals.set(labelFor(r, key), (totals.get(labelFor(r, key)) || 0) + r.value);
+  return [...totals.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
+}
+
+function labelFor(row, key) {
+  return key === "item" ? row.label : row[key];
+}
+
+function groupRows() {
+  const key = state.level;
+  const rows = filtered(leaves());
+  const acc = new Map();
+  for (const r of rows) {
+    const name = labelFor(r, key);
+    const cur = acc.get(name)
+      || { name, value: 0, fullValue: 0, sub: null, drillValue: r[key], where: new Set(), leaves: [] };
+    cur.fullValue += r.value;
+    // A row is only out when nothing inside it survived — an account whose cash
+    // was split into an excluded Cash class still counts for what remains.
+    if (!leafExcluded(r)) cur.value += r.value;
+    cur.leaves.push(r);
+    cur.where.add(key === "item" ? r.account : r.class);
+    acc.set(name, cur);
+  }
+  let total = 0;
+  for (const r of acc.values()) { r.excluded = r.value === 0; total += r.value; }
+  // A sub-label only earns its place when it names something the row itself and
+  // the breadcrumb do not already say.
+  const depth = key === "item" ? 2 : 1;
+  for (const r of acc.values()) {
+    r.sub = key === "class" || state.path.length >= depth ? null
+      : r.where.size > 1 ? `${r.where.size} ${key === "item" ? "accounts" : "classes"}`
+      : [...r.where][0];
+    if (r.sub === r.name) r.sub = null;
+  }
+  // Two different orders, deliberately. The colour slot follows the canonical
+  // order so toggling the basis or drilling in never repaints a segment, while
+  // the rows themselves come out largest-first — a ring and a table are both
+  // read by size, and a fixed ring order buries a big class below a small one.
+  const order = canonicalOrder(key);
+  const all = [...acc.values()];
+  for (const r of all) {
+    const i = order.indexOf(r.name);
+    r.slot = i >= 0 && i < MAX_SEGMENTS ? i : OTHER_SLOT;
+    r.share = total ? r.value / total : 0;
+  }
+  all.sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+  return { rows: all, total };
+}
+
+// The donut only ever paints MAX_SEGMENTS arcs; the tail and any sliver too
+// thin to hover fold into "Other". The table below still lists every row.
+function segmentsFrom(rows, total) {
+  const keep = [], fold = [];
+  for (const r of rows.filter((r) => !r.excluded)) {
+    if (keep.length < MAX_SEGMENTS - 1 && r.share >= MIN_SHARE) keep.push(r);
+    else fold.push(r);
+  }
+  if (fold.length === 1 && keep.length < MAX_SEGMENTS) { keep.push(fold[0]); fold.length = 0; }
+  if (!fold.length) return keep.map((r) => ({ ...r }));
+  const rest = fold.reduce((a, r) => a + r.value, 0);
+  return [...keep.map((r) => ({ ...r })), {
+    name: "Other", value: rest, share: total ? rest / total : 0,
+    slot: OTHER_SLOT, folded: fold.length, drillValue: null, sub: null, foldedRows: fold
+  }];
+}
+
+/* ---- donut ------------------------------------------------------------- */
+
+const CX = 100, CY = 100, R_OUT = 88, R_IN = 58, R_MID = (R_OUT + R_IN) / 2;
+const GAP = 2 / R_MID;   // a 2px surface gap, expressed as an angle at mid-radius
+const TAU = Math.PI * 2;
+
+function arcPath(a0, a1, rOut, rIn) {
+  const span = Math.min(a1 - a0, TAU - 1e-4);
+  const end = a0 + span;
+  const large = span > Math.PI ? 1 : 0;
+  const P = (r, a) => `${(CX + r * Math.cos(a)).toFixed(3)} ${(CY + r * Math.sin(a)).toFixed(3)}`;
+  return `M${P(rOut, a0)}A${rOut} ${rOut} 0 ${large} 1 ${P(rOut, end)}`
+       + `L${P(rIn, end)}A${rIn} ${rIn} 0 ${large} 0 ${P(rIn, a0)}Z`;
+}
+
+function luminance(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+    .map((v) => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); });
+  return .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+}
+
+function isDark() {
+  const t = document.documentElement.dataset.theme;
+  if (t === "dark") return true;
+  if (t === "light") return false;
+  return matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function drawDonut(segs, total) {
+  const svg = document.getElementById("donut");
+  while (svg.childNodes.length > 1) svg.removeChild(svg.lastChild);
+  const NS = "http://www.w3.org/2000/svg";
+  const ramp = RAW[isDark() ? "dark" : "light"];
+
+  let a = -Math.PI / 2;
+  segs.forEach((s) => {
+    const span = total ? (s.value / total) * TAU : 0;
+    if (span <= 0) return;
+    const pad = Math.min(GAP, span * 0.4);
+    const a0 = a + pad / 2, a1 = a + span - pad / 2;
+    a += span;
+
+    const g = document.createElementNS(NS, "g");
+    g.setAttribute("class", "seg");
+    g.setAttribute("tabindex", "0");
+    g.setAttribute("role", "button");
+    // Private mode has to cover the screen reader too, or the amount is still
+    // being read out loud next to a hidden number.
+    g.setAttribute("aria-label", state.private
+      ? `${s.name}, ${pct(s.share)}`
+      : `${s.name}, ${money2.format(s.value)}, ${pct(s.share)}`);
+
+    const hit = document.createElementNS(NS, "path");
+    hit.setAttribute("d", arcPath(a0 - pad / 2, a1 + pad / 2, R_OUT + 8, R_IN - 8));
+    hit.setAttribute("fill", "transparent");
+    g.appendChild(hit);
+
+    const p = document.createElementNS(NS, "path");
+    p.setAttribute("class", "seg-arc");
+    p.setAttribute("d", arcPath(a0, a1, R_OUT, R_IN));
+    p.setAttribute("fill", SLOTS[s.slot]);
+    p.dataset.base = arcPath(a0, a1, R_OUT, R_IN);
+    p.dataset.lift = arcPath(a0, a1, R_OUT + 4, R_IN);
+    g.appendChild(p);
+
+    const mid = (a0 + a1) / 2;
+    if ((a1 - a0) * R_MID > 24 && s.share >= 0.06) {
+      const t = document.createElementNS(NS, "text");
+      t.setAttribute("x", (CX + R_MID * Math.cos(mid)).toFixed(2));
+      t.setAttribute("y", (CY + R_MID * Math.sin(mid)).toFixed(2));
+      t.setAttribute("text-anchor", "middle");
+      t.setAttribute("dominant-baseline", "central");
+      t.setAttribute("font-size", "8");
+      t.setAttribute("font-weight", "600");
+      t.setAttribute("fill", luminance(ramp[s.slot]) > 0.45 ? "#0b0b0b" : "#ffffff");
+      t.setAttribute("pointer-events", "none");
+      t.textContent = Math.round(s.share * 100) + "%";
+      g.appendChild(t);
+    }
+
+    const enter = (ev) => { focusSeg(s, ramp); moveTip(ev); };
+    g.addEventListener("pointerenter", enter);
+    g.addEventListener("pointermove", moveTip);
+    g.addEventListener("pointerleave", blurSeg);
+    g.addEventListener("focus", () => focusSeg(s, ramp, g));
+    g.addEventListener("blur", blurSeg);
+    g.addEventListener("click", () => drill(s));
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); drill(s); } });
+    svg.appendChild(g);
+    s._g = g;
+  });
+}
+
+/* ---- hover layer ------------------------------------------------------- */
+
+const tip = document.getElementById("tip");
+
+function focusSeg(s, ramp, node) {
+  for (const p of document.querySelectorAll("#donut path.seg-arc")) p.setAttribute("d", p.dataset.base);
+  const arc = (node || s._g)?.querySelector("path.seg-arc");
+  if (arc) arc.setAttribute("d", arc.dataset.lift);
+  for (const row of document.querySelectorAll(".legend-row")) row.classList.toggle("hot", row.dataset.name === s.name);
+
+  document.getElementById("centerKey").textContent = s.name;
+  amount(document.getElementById("centerVal"), m(s.value));
+  document.getElementById("centerSub").textContent = pct(s.share) + (s.folded ? ` · ${s.folded} rows` : "");
+
+  // The tooltip exists to answer "how much is this", so a row of bullets would
+  // make it pointless — in private mode it answers with the share instead.
+  tip.querySelector(".v").textContent = state.private ? pct(s.share) : money2.format(s.value);
+  tip.querySelector(".key").style.background = ramp[s.slot];
+  tip.querySelector(".nm").textContent = s.name + (s.folded ? ` (${s.folded} rows)` : "");
+  tip.dataset.show = "true";
+  if (node) {
+    const r = node.getBoundingClientRect();
+    place(r.left + r.width / 2, r.top);
+  }
+}
+
+function moveTip(ev) { place(ev.clientX + 14, ev.clientY + 14); }
+
+function place(x, y) {
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.min(x, innerWidth - r.width - 8) + "px";
+  tip.style.top = Math.min(Math.max(y, 8), innerHeight - r.height - 8) + "px";
+}
+
+function blurSeg() {
+  for (const p of document.querySelectorAll("#donut path.seg-arc")) p.setAttribute("d", p.dataset.base);
+  for (const row of document.querySelectorAll(".legend-row")) row.classList.remove("hot");
+  tip.dataset.show = "false";
+  renderCenter();
+}
+
+/* ---- navigation -------------------------------------------------------- */
+
+function drill(s) {
+  if (!s.drillValue) return;
+  const idx = depthOf(state.level);
+  if (idx >= LEVELS.length - 1) return;
+  state.path = state.path.filter((p) => depthOf(p.level) < idx);
+  state.path.push({ level: state.level, value: s.drillValue, label: s.name });
+  state.level = LEVELS[idx + 1];
+  render();
+}
+
+// Picking a coarser granularity keeps the filters that sit above it — "Class"
+// while inside the US still means the US — and drops the rest.
+function setLevel(level) {
+  state.path = state.path.filter((p) => depthOf(p.level) < depthOf(level));
+  state.level = level;
+  render();
+}
+
+/* ---- render ------------------------------------------------------------ */
+
+// The denominator for "share of total" has to respect exclusions too, or the
+// column stops adding up to the footer.
+function grandTotal() {
+  return leaves().filter((l) => !leafExcluded(l)).reduce((a, l) => a + l.value, 0);
+}
+
+function excludedTotal() {
+  return leaves().filter(leafExcluded).reduce((a, l) => a + l.value, 0);
+}
+
+// Turning a row off pins it at the level you're looking at. Turning it back on
+// has to lift whatever was blocking it, which may be an exclusion taken higher
+// up (drop "Property", drill to accounts, re-tick the flat).
+function setRowIncluded(row, included) {
+  const targets = row.foldedRows || [row];
+  for (const t of targets) {
+    if (included) for (const l of t.leaves) for (const k of leafKeys(l)) state.excluded.delete(k);
+    else if (t.drillValue) state.excluded.add(`${state.level}::${t.drillValue}`);
+    else for (const l of t.leaves) state.excluded.add(`item::${l.label}`);
+  }
+  saveExclusions();
+  render();
+}
+
+function renderHero() {
+  const netted = DATA.liability_accounts.filter((l) => l.nets_against).reduce((a, l) => a + l.value, 0);
+  const off = excludedTotal();
+  document.getElementById("heroKey").textContent =
+    (state.mode === "net" ? "Net worth" : "Gross assets") + (off ? " · filtered" : "");
+  amount(document.getElementById("heroVal"), m2(grandTotal()));
+  // The subtitle is the one place where a share is more informative than the
+  // masked figure, since both of its numbers are fractions of gross assets.
+  const basis = state.mode === "net"
+    ? (state.private
+        ? `Assets less ${pct(DATA.assets ? netted / DATA.assets : 0)} of debt secured on them`
+        : `${money2.format(DATA.assets)} of assets less ${money2.format(netted)} of debt secured on them`)
+    : (state.private
+        ? `Before liabilities worth ${pct(DATA.assets ? DATA.liabilities / DATA.assets : 0)} of assets`
+        : `Before ${money2.format(DATA.liabilities)} of liabilities`);
+  const grossOff = grandTotal() + off;
+  document.getElementById("heroSub").textContent = off
+    ? (state.private
+        ? `${basis}, less ${pct(grossOff ? off / grossOff : 0)} excluded`
+        : `${basis}, less ${money2.format(off)} excluded`)
+    : basis;
+}
+
+function renderExclBar() {
+  const bar = document.getElementById("exclBar");
+  const n = state.excluded.size;
+  bar.hidden = n === 0;
+  if (n === 0) return;
+  const names = [...state.excluded].map((k) => k.split("::").slice(1).join("::"));
+  const off = excludedTotal();
+  const gross = grandTotal() + off;
+  document.getElementById("exclText").textContent = state.private
+    ? `Excluding ${pct(gross ? off / gross : 0)} — ${names.join(", ")}`
+    : `Excluding ${money2.format(off)} — ${names.join(", ")}`;
+}
+
+// The hero above already carries the grand total, so at the root the centre
+// counts rows instead of repeating it. Hovering replaces it with the segment.
+function renderCenter() {
+  const { rows, total } = groupRows();
+  const key = document.getElementById("centerKey");
+  const val = document.getElementById("centerVal");
+  const sub = document.getElementById("centerSub");
+  if (state.path.length) {
+    key.textContent = state.path[state.path.length - 1].label;
+    amount(val, m(total));
+    sub.textContent = pct(total / grandTotal()) + " of total";
+  } else {
+    key.textContent = LEVEL_PLURAL[state.level];
+    // A row count is not an amount, so it must lose the fade on the way back.
+    val.classList.remove("money");
+    val.textContent = String(rows.filter((r) => !r.excluded).length);
+    // At the root the subtitle is the only place the total appears in the ring,
+    // and the hero already carries it — so private mode drops it entirely
+    // rather than showing a bullet string that says nothing.
+    sub.textContent = state.private ? "" : money.format(total);
+  }
+}
+
+function renderCrumbs() {
+  const nav = document.getElementById("crumbs");
+  nav.textContent = "";
+  nav.hidden = state.path.length === 0;
+  if (nav.hidden) return;
+  const mk = (label, onClick, current) => {
+    if (current) {
+      const s = document.createElement("span");
+      s.className = "current";
+      s.textContent = label;
+      return s;
+    }
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.addEventListener("click", onClick);
+    return b;
+  };
+  nav.appendChild(mk("All", () => setLevel(state.path[0].level), state.path.length === 0));
+  state.path.forEach((p, i) => {
+    const sep = document.createElement("span");
+    sep.className = "sep";
+    sep.textContent = "›";
+    nav.appendChild(sep);
+    nav.appendChild(mk(p.label, () => {
+      state.path = state.path.slice(0, i + 1);
+      state.level = LEVELS[depthOf(p.level) + 1];
+      render();
+    }, i === state.path.length - 1));
+  });
+}
+
+function renderLegend(segs, ramp, excluded = []) {
+  const box = document.getElementById("legend");
+  box.textContent = "";
+  const drillable = depthOf(state.level) < LEVELS.length - 1;
+  for (const s of segs) {
+    const row = document.createElement("div");
+    row.className = "legend-row";
+    row.dataset.name = s.name;
+
+    const main = document.createElement("button");
+    main.type = "button";
+    const leaf = !s.drillValue || !drillable;
+    main.dataset.leaf = String(leaf);
+    main.className = "legend-main";
+    if (leaf) main.setAttribute("aria-disabled", "true");
+
+    const sw = document.createElement("span");
+    sw.className = "swatch";
+    sw.style.background = ramp[s.slot];
+    const nm = document.createElement("span");
+    nm.className = "legend-name";
+    nm.textContent = s.name + (s.folded ? ` (${s.folded})` : "");
+    const val = document.createElement("span");
+    val.className = "legend-val";
+    amount(val, m(s.value));
+    const pc = document.createElement("span");
+    pc.className = "legend-pct";
+    pc.textContent = pct(s.share);
+    main.append(sw, nm, val, pc);
+
+    const x = document.createElement("button");
+    x.type = "button";
+    x.className = "legend-x";
+    x.textContent = "×";
+    x.title = `Exclude ${s.name}`;
+    x.setAttribute("aria-label", `Exclude ${s.name}`);
+    x.addEventListener("click", () => setRowIncluded(s, false));
+
+    row.append(main, x);
+    row.addEventListener("pointerenter", () => focusSeg(s, ramp, s._g));
+    row.addEventListener("pointerleave", blurSeg);
+    if (!leaf) main.addEventListener("click", () => drill(s));
+    box.appendChild(row);
+  }
+
+  // Excluded rows stay listed, dimmed, so the legend can undo what it did.
+  for (const r of excluded) {
+    const row = document.createElement("div");
+    row.className = "legend-row off";
+    row.dataset.name = r.name;
+
+    const main = document.createElement("button");
+    main.type = "button";
+    main.className = "legend-main";
+    main.dataset.leaf = "true";
+    main.setAttribute("aria-disabled", "true");
+    const sw = document.createElement("span");
+    sw.className = "swatch";
+    sw.style.background = ramp[r.slot];
+    const nm = document.createElement("span");
+    nm.className = "legend-name";
+    nm.textContent = r.name;
+    const val = document.createElement("span");
+    val.className = "legend-val";
+    amount(val, m(r.fullValue));
+    const pc = document.createElement("span");
+    pc.className = "legend-pct";
+    pc.textContent = "—";
+    main.append(sw, nm, val, pc);
+
+    const plus = document.createElement("button");
+    plus.type = "button";
+    plus.className = "legend-x";
+    plus.textContent = "+";
+    plus.title = `Include ${r.name}`;
+    plus.setAttribute("aria-label", `Include ${r.name}`);
+    plus.addEventListener("click", () => setRowIncluded(r, true));
+
+    row.append(main, plus);
+    box.appendChild(row);
+  }
+}
+
+function renderTable(rows, total, ramp) {
+  const tbody = document.getElementById("tbody");
+  const tfoot = document.getElementById("tfoot");
+  tbody.textContent = "";
+  tfoot.textContent = "";
+  const grand = grandTotal();
+
+  const off = rows.filter((r) => r.excluded).length;
+  document.getElementById("tableCaption").textContent =
+    `Breakdown by ${LEVEL_NAME[state.level].toLowerCase()}`
+    + (state.path.length ? " · " + state.path.map((p) => p.label).join(" › ") : "")
+    + ` · ${rows.length} rows` + (off ? ` (${off} excluded)` : "");
+
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    if (r.excluded) tr.className = "off";
+
+    const tdPick = document.createElement("td");
+    tdPick.className = "pick";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = !r.excluded;
+    box.setAttribute("aria-label", `Include ${r.name}`);
+    box.addEventListener("change", () => setRowIncluded(r, box.checked));
+    tdPick.appendChild(box);
+
+    const td1 = document.createElement("td");
+    td1.className = "name";
+    const sw = document.createElement("span");
+    sw.className = "swatch";
+    sw.style.background = ramp[r.slot];
+    const label = document.createElement("span");
+    label.textContent = r.name;
+    td1.append(sw, label);
+    if (r.sub) {
+      const sub = document.createElement("span");
+      sub.className = "sub";
+      sub.textContent = r.sub;
+      td1.appendChild(sub);
+    }
+    // An excluded row keeps showing what it is worth, so you can see the cost of
+    // leaving it out, but it contributes no share.
+    const td2 = document.createElement("td");
+    td2.className = "num";
+    amount(td2, m2(r.excluded ? r.fullValue : r.value));
+    const td3 = document.createElement("td");
+    td3.className = "num";
+    td3.textContent = r.excluded ? "—" : pct(r.share);
+    const td4 = document.createElement("td");
+    td4.className = "num";
+    td4.textContent = r.excluded ? "—" : pct(r.value / grand);
+    tr.append(tdPick, td1, td2, td3, td4);
+    tbody.appendChild(tr);
+  }
+
+  const tr = document.createElement("tr");
+  const pad = document.createElement("td");
+  const a = document.createElement("td");
+  a.textContent = "Total";
+  const b = document.createElement("td");
+  amount(b, m2(total));
+  const c = document.createElement("td");
+  c.textContent = total ? "100.0%" : "—";
+  const d = document.createElement("td");
+  d.textContent = grand ? pct(total / grand) : "—";
+  tr.append(pad, a, b, c, d);
+  tfoot.appendChild(tr);
+}
+
+function renderFooter() {
+  const f = document.getElementById("footer");
+  f.textContent = "";
+  const add = (text, cls) => {
+    const p = document.createElement("p");
+    if (cls) p.className = cls;
+    p.textContent = text;
+    f.appendChild(p);
+  };
+  add(state.private
+    ? `Liabilities are ${pct(DATA.assets ? DATA.liabilities / DATA.assets : 0)} of gross assets; net worth is ${pct(DATA.assets ? DATA.net_worth / DATA.assets : 0)} of them.`
+    : `Gross assets ${money2.format(DATA.assets)} · liabilities ${money2.format(DATA.liabilities)} · net worth ${money2.format(DATA.net_worth)}.`);
+  if (state.mode === "net") {
+    const matched = DATA.liability_accounts.filter((l) => l.nets_against);
+    if (matched.length) add("Netted against the asset they financed: " + matched.map((l) => `${l.name} → ${l.nets_against}`).join("; "));
+    const loose = unmatchedLiabilities();
+    if (loose.length) add("Not netted (no asset mapped, so excluded from the donut): " + loose.map((l) => `${l.name} ${m2(l.value)}`).join("; "), "warn");
+  }
+  if (DATA.fx.length) add("FX: " + DATA.fx.join(" · "));
+  // The reconciliation warning quotes the asset total outright, so warnings get
+  // masked wholesale rather than trusted.
+  for (const w of DATA.warnings || []) add(mask(w), "warn");
+  add(`Generated from ${DATA.as_of} Sure data. Segments under ${(MIN_SHARE * 100).toFixed(2)}% and any tail past ${MAX_SEGMENTS} rows fold into "Other" in the donut only — the table lists every row.`);
+}
+
+function render() {
+  document.body.classList.toggle("numbers-hidden", state.private);
+  const ramp = RAW[isDark() ? "dark" : "light"];
+  const { rows, total } = groupRows();
+  const segs = segmentsFrom(rows, total);
+  renderCrumbs();
+  renderExclBar();
+  drawDonut(segs, total);
+  renderLegend(segs, ramp, rows.filter((r) => r.excluded));
+  renderTable(rows, total, ramp);
+  renderHero();
+  renderCenter();
+  renderFooter();
+
+  for (const b of document.querySelectorAll("[data-mode]")) b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode));
+  for (const b of document.querySelectorAll("[data-level]")) b.setAttribute("aria-pressed", String(b.dataset.level === state.level));
+  // Pressed means "amounts are hidden", which is also what swaps the eye for
+  // the struck-through one and flips the label the tooltip offers.
+  const pt = document.getElementById("privToggle");
+  pt.setAttribute("aria-pressed", String(state.private));
+  const label = state.private ? "Show amounts (H)" : "Hide amounts, keep percentages (H)";
+  pt.title = label;
+  pt.setAttribute("aria-label", label);
+}
+
+function setPrivate(on) {
+  state.private = on;
+  savePrivate();
+  render();
+}
+
+// Served from a container the page can sit on screen for hours, so say how old
+// the numbers are rather than only which trading day they describe.
+function renderFreshness() {
+  const el = document.getElementById("asOf");
+  if (!DATA.generated_at) { el.textContent = "as of " + DATA.as_of; return; }
+  const mins = Math.max(0, Math.round((Date.now() - Date.parse(DATA.generated_at)) / 60000));
+  const age = mins < 1 ? "just now"
+    : mins < 60 ? `${mins} min ago`
+    : mins < 1440 ? `${Math.round(mins / 60)} h ago`
+    : `${Math.round(mins / 1440)} d ago`;
+  el.textContent = `${DATA.as_of} positions · pulled ${age}`;
+  el.title = DATA.generated_at;
+}
+function showGate(msg, offerSignIn) {
+  document.getElementById("app").hidden = true;
+  document.getElementById("gate").hidden = false;
+  document.getElementById("gateMsg").textContent = msg;
+  document.getElementById("signIn").hidden = !offerSignIn;
+}
+
+function start() {
+  money = new Intl.NumberFormat("en-IE", { style: "currency", currency: DATA.currency, maximumFractionDigits: 0 });
+  money2 = new Intl.NumberFormat("en-IE", { style: "currency", currency: DATA.currency, minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  document.getElementById("gate").hidden = true;
+  document.getElementById("app").hidden = false;
+  document.getElementById("signOutBox").hidden = !CONFIG;
+  bindControls();
+  renderFreshness();
+  setInterval(renderFreshness, 60000);
+  loadExclusions();
+  loadPrivate();
+  render();
+}
+
+async function boot() {
+  try {
+    let data = BAKED;
+    if (!data) {
+      CONFIG = await (await fetch("config.json")).json();
+      if (!CONFIG.client_id) return location.replace("onboarding");
+      const q = new URLSearchParams(location.search);
+      if (q.has("signed_out")) {
+        history.replaceState(null, "", redirectUri());
+        return showGate("Signed out of the allocation page.", true);
+      }
+      const fresh = q.has("code") || q.has("error");
+      const tok = fresh ? await exchangeCode(q) : sessionStorage.getItem(TOKEN_KEY);
+      if (!tok) return signIn();
+      showGate("Loading from Sure…", false);
+      const date = new Date().toLocaleDateString("sv-SE");
+      const res = await fetch(`api/allocation?date=${date}`, { headers: { Authorization: `Bearer ${tok}` } });
+      if (res.status === 401) {
+        sessionStorage.removeItem(TOKEN_KEY);
+        if (fresh) throw new Error("Sure rejected a token it just issued.");
+        return signIn();
+      }
+      if (!res.ok) throw new Error(`Loading failed: ${await res.text()}`);
+      data = await res.json();
+    }
+    DATA = data;
+    start();
+  } catch (e) {
+    showGate(e.message || String(e), !!CONFIG);
+  }
+}
+
+function bindControls() {
+  for (const b of document.querySelectorAll("[data-mode]")) {
+    b.addEventListener("click", () => { state.mode = b.dataset.mode; render(); });
+  }
+  for (const b of document.querySelectorAll("[data-level]")) {
+    b.addEventListener("click", () => setLevel(b.dataset.level));
+  }
+  for (const b of document.querySelectorAll("[data-theme-set]")) {
+    b.addEventListener("click", () => {
+      const v = b.dataset.themeSet;
+      if (v === "auto") delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = v;
+      for (const o of document.querySelectorAll("[data-theme-set]")) o.setAttribute("aria-pressed", String(o === b));
+      render();
+    });
+  }
+  document.getElementById("privToggle").addEventListener("click", () => setPrivate(!state.private));
+  // H toggles it, because the moment you need this you usually need it now —
+  // someone is already looking at the screen. Ignored while typing in a field.
+  addEventListener("keydown", (e) => {
+    if (e.key !== "h" && e.key !== "H") return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t?.isContentEditable) return;
+    e.preventDefault();
+    setPrivate(!state.private);
+  });
+  document.getElementById("exclReset").addEventListener("click", () => {
+    state.excluded.clear();
+    saveExclusions();
+    render();
+  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+  document.getElementById("signOut").addEventListener("click", signOut);
+}
+
+document.getElementById("signIn").addEventListener("click", signIn);
+boot();
+</script>
+</body>
+</html>

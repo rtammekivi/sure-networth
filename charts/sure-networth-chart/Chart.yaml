@@ -1,0 +1,13 @@
+apiVersion: v2
+name: sure-networth-chart
+description: Net worth allocation donut for Sure, signed in per user
+type: application
+home: https://github.com/rtammekivi/sure-networth
+sources:
+  - https://github.com/rtammekivi/sure-networth
+keywords:
+  - sure
+  - finance
+  - net-worth
+version: 0.1.0 # x-release-please-version
+appVersion: "0.1.0" # x-release-please-version
