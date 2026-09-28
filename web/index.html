@@ -1107,10 +1107,12 @@ function pastSeries(segs) {
   let other = series.find((s) => s.slot === OTHER_SLOT && s.name === "Other");
   if (!other) series.push(other = { name: "Other", slot: OTHER_SLOT, values: [] });
   const byName = new Map(series.filter((s) => s !== other).map((s) => [s.name, s]));
+  const bad = untrustedAccounts();
   for (const p of points) {
     const sums = new Map(series.map((s) => [s, 0]));
     for (const r of filtered(leaves(p))) {
       if (leafExcluded(r)) continue;
+      if (p !== DATA && bad.has(r.account) && p.as_of <= bad.get(r.account).until) continue;
       const s = byName.get(labelFor(r, state.level)) || other;
       sums.set(s, sums.get(s) + r.value);
     }
@@ -1226,25 +1228,30 @@ function drawPast() {
   renderPastWarn();
 }
 
-// Sure rebuilds history from recorded activity, so an account whose earlier
-// deposits or holdings were never imported goes negative there. The chart
-// draws that as nothing; this says so.
-function renderPastWarn() {
-  const neg = new Map();
+// Sure rebuilds an account's history backwards from today, so a wrongly
+// recorded or missing movement skews every earlier date and eventually drives
+// the account negative. Up to its last negative date the account is left out.
+function untrustedAccounts() {
+  const bad = new Map();
   for (const p of PAST.get(state.years) || []) {
     const byAccount = new Map();
     for (const l of p.leaves) byAccount.set(l.account, (byAccount.get(l.account) || 0) + l.value);
     for (const [a, v] of byAccount) {
       if (v > -0.5) continue;
-      const w = neg.get(a) || { from: p.as_of, to: p.as_of, min: 0 };
-      w.to = p.as_of;
+      const w = bad.get(a) || { until: p.as_of, min: 0 };
+      w.until = p.as_of;
       w.min = Math.min(w.min, v);
-      neg.set(a, w);
+      bad.set(a, w);
     }
   }
-  document.getElementById("pastWarn").textContent = neg.size
-    ? "Sure reports a negative balance for these asset accounts, drawn as zero: "
-      + [...neg].map(([a, w]) => `${a} (down to ${m(w.min)}, ${w.from === w.to ? w.from : `${w.from} to ${w.to}`})`).join("; ")
+  return bad;
+}
+
+function renderPastWarn() {
+  const bad = untrustedAccounts();
+  document.getElementById("pastWarn").textContent = bad.size
+    ? "Left out up to the last date Sure's history for them goes negative: "
+      + [...bad].map(([a, w]) => `${a} (through ${w.until}, down to ${m(w.min)})`).join("; ")
     : "";
 }
 
