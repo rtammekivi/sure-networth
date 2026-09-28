@@ -41,6 +41,35 @@ OVERLAY = """
 """
 
 
+# The baked page has no Sure behind it, so the demo answers api/history itself:
+# each past month-end is the demo data bent along a per-class path.
+HISTORY = """
+(() => {
+  const paths = {
+    Property: () => 1,
+    Equities: (t, i) => 0.74 + 0.26 * t + 0.035 * Math.sin(i * 1.7),
+    Pension: (t) => 0.86 + 0.14 * t,
+    Bonds: (t) => 0.7 + 0.3 * Math.round(t * 3) / 3,
+    Cash: (t, i) => 1.1 + 0.18 * Math.sin(i * 2.3) - 0.1 * t,
+    Crypto: (t, i) => 0.62 + 0.38 * t + 0.16 * Math.sin(i * 1.1),
+    Other: (t) => 1.18 - 0.18 * t,
+  };
+  CONFIG = {};
+  window.fetch = async (url) => {
+    const dates = new URL(url, location.href).searchParams.get("dates").split(",");
+    const points = dates.map((as_of, i) => {
+      const t = i / dates.length;
+      const leaves = DATA.leaves.map((l) => ({ ...l, value: Math.round(l.value * (paths[l.class] || (() => 1))(t, i)) }));
+      const liability_accounts = DATA.liability_accounts.map((l) => ({ ...l, value: Math.round(l.value * (1 + 0.035 * (1 - t))) }));
+      return { ...DATA, as_of, leaves, liability_accounts };
+    });
+    return { ok: true, status: 200, json: async () => points };
+  };
+  document.getElementById("timeTab").hidden = false;
+})();
+"""
+
+
 class Page:
     def __init__(self, ws_url):
         self.ws = websocket.create_connection(ws_url, timeout=30, suppress_origin=True)
@@ -95,6 +124,7 @@ class Page:
             py = self.y + (y - self.y) * i / steps
             self.send("Input.dispatchMouseEvent", type="mouseMoved", x=px, y=py)
             self.hold(0.5 / steps)
+        self.send("Input.dispatchMouseEvent", type="mouseMoved", x=x, y=y)
         self.x, self.y = x, y
 
     def click(self):
@@ -122,6 +152,14 @@ def q(selector):
     return f"document.querySelector({json.dumps(selector)})"
 
 
+def cell(row, col):
+    return f"[...document.querySelectorAll('#heat .cell')].find(b => b.getAttribute('aria-label').startsWith({json.dumps(f'{row}, {col}:')}))"
+
+
+def legend_item(name):
+    return f"[...document.querySelectorAll('#pastLegend button')].find(b => b.textContent === {json.dumps(name)})"
+
+
 def segment(name):
     return f"[...document.querySelectorAll('#donut g.seg')].find(g => g.getAttribute('aria-label').startsWith({json.dumps(name + ',')}))"
 
@@ -136,48 +174,92 @@ def bake(out):
 
 def record(page):
     page.caption("")
-    page.hold(1.2)
+    page.hold(1.0)
 
     page.caption("Allocation by asset class, straight from Sure")
-    page.hold(1.6)
+    page.hold(1.4)
 
     page.caption("Hover a segment for its value")
     page.move(segment("Equities"))
-    page.hold(1.6)
+    page.hold(1.3)
 
     page.caption("Click to drill in: class → account → holding")
     page.click()
-    page.hold(1.4)
+    page.hold(1.2)
     page.move(q('.legend-row[data-name="Brokerage"] .legend-main'))
     page.click()
-    page.hold(1.8)
+    page.hold(1.5)
 
-    page.caption("Or cut it by market")
+    page.caption("Or group by market")
     page.move(q('[data-level="market"]'))
     page.click()
-    page.hold(1.8)
+    page.hold(1.5)
 
-    page.caption("Net worth nets the mortgage against the flat")
+    page.caption("The treemap keeps every holding the donut folds away")
+    page.move(q('[data-level="item"]'))
+    page.click()
+    page.hold(0.9)
+    page.move(q('[data-chart="treemap"]'))
+    page.click()
+    page.hold(2.2)
+    page.move(q('[data-chart="donut"]'))
+    page.click()
     page.move(q('[data-level="class"]'))
     page.click()
-    page.hold(0.6)
+    page.hold(0.4)
+
+    page.caption("Net worth nets the mortgage against the flat")
     page.move(q('[data-mode="net"]'))
     page.click()
-    page.hold(2.0)
+    page.hold(1.8)
 
     page.caption("Exclude anything to see the rest")
     page.move(q('.legend-row[data-name="Property"] .legend-main'))
-    page.hold(0.4)
+    page.hold(0.3)
     page.move(q('.legend-row[data-name="Property"] .legend-x'))
     page.click()
-    page.hold(2.0)
+    page.hold(1.8)
 
     page.caption("Private mode hides amounts, keeps percentages")
     page.move(q("#privToggle"))
     page.click()
-    page.hold(2.4)
+    page.hold(2.0)
     page.click()
     page.move(q("#exclReset"))
+    page.click()
+    page.move(q('[data-mode="assets"]'))
+    page.click()
+    page.hold(0.4)
+
+    page.caption("Grid: market × asset class at a glance")
+    page.move(q('[data-tab="grid"]'))
+    page.click()
+    page.hold(1.2)
+    page.move(cell("United States", "Equities"))
+    page.hold(1.6)
+
+    page.caption("…or currency × asset class")
+    page.move(q('[data-level="currency"]'))
+    page.click()
+    page.hold(1.8)
+
+    page.caption("Over time, rebuilt from Sure's history")
+    page.move(q('[data-tab="time"]'))
+    page.click()
+    page.hold(1.4)
+    page.move("document.querySelectorAll('#pastChart .col')[4]")
+    page.hold(1.6)
+
+    page.caption("As shares of the whole")
+    page.move(q('[data-scale="share"]'))
+    page.click()
+    page.hold(1.8)
+
+    page.caption("The legend excludes here too")
+    page.move(legend_item("Property"))
+    page.click()
+    page.move(q("#exclReset"))
+    page.hold(1.8)
     page.click()
     page.caption("")
     page.hold(1.0)
@@ -213,6 +295,7 @@ def main():
                 break
             time.sleep(0.1)
         page.js(OVERLAY)
+        page.js(HISTORY)
         record(page)
 
         frames = work / "frames"

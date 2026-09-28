@@ -2,7 +2,7 @@
 
 A net-worth allocation donut for [Sure](https://github.com/we-promise/sure), which has none: market or currency → asset class → account → holding, with click-to-drill, a gross-assets / net-worth toggle, exclusions, a private mode that hides amounts but keeps percentages, and the same cut over the last 1, 3 or 5 years.
 
-![Demo: hovering, drilling from class to holdings, the market cut, the net-worth basis, excluding property and private mode](docs/demo.gif)
+![Demo: hovering, drilling from class to holdings, grouping by market, the treemap, the net-worth basis, excluding property, private mode, the market and currency grid, and allocation over time](docs/demo.gif)
 
 The demo runs on made-up data in [`docs/demo-data.json`](docs/demo-data.json); regenerate it with `nix develop .#demo -c python3 docs/record-demo.py`.
 
