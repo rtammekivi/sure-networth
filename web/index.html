@@ -92,6 +92,16 @@
   .seg button:hover { background: var(--wash); }
   .seg button[aria-pressed="true"] { background: var(--wash); color: var(--text-primary); font-weight: 600; }
   .seg[hidden] { display: none; }
+  .ctl-group { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; }
+  .ctl-group[hidden] { display: none; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .tabs button {
+    appearance: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    background: transparent; font: inherit; color: var(--text-secondary); padding: 8px 12px; cursor: pointer;
+  }
+  .tabs button:hover { color: var(--text-primary); }
+  .tabs button[aria-selected="true"] { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--text-primary); }
+  .tabs button[hidden] { display: none; }
   .ctl-label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
 
   /* Sits at the right end of the controls row, under the theme switcher. Same
@@ -212,7 +222,6 @@
   .tip .row .nm { color: var(--text-secondary); }
   .tip .row .pc { color: var(--text-muted); font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 10px; }
 
-  section.past { margin-top: 24px; }
   .sec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   .sec-head h2 { flex: 1; margin: 0; }
   .past-card { padding: 16px 16px 12px; }
@@ -226,7 +235,6 @@
   .past-msg { font-size: 13px; color: var(--text-secondary); margin: 8px 0 0; }
   .past-msg:empty { display: none; }
 
-  section.grid-view { margin-top: 24px; }
   .heat { border-collapse: separate; border-spacing: 2px; font-size: 12px; }
   .heat th, .heat td { padding: 6px 8px; text-align: right; }
   .heat thead th { border-bottom: 0; text-align: center; }
@@ -306,7 +314,8 @@
       <button type="button" data-mode="assets" aria-pressed="true">Gross assets</button>
       <button type="button" data-mode="net">Net worth</button>
     </div>
-    <span class="ctl-label" style="margin-left:8px">Granularity</span>
+    <div class="ctl-group" data-for="allocation time">
+    <span class="ctl-label">Granularity</span>
     <div class="seg" role="group" aria-label="Granularity">
       <button type="button" data-level="market">Market</button>
       <button type="button" data-level="currency">Currency</button>
@@ -314,10 +323,13 @@
       <button type="button" data-level="account">Account</button>
       <button type="button" data-level="item">Holding</button>
     </div>
-    <span class="ctl-label" style="margin-left:8px">Chart</span>
+    </div>
+    <div class="ctl-group" data-for="allocation">
+    <span class="ctl-label">Chart</span>
     <div class="seg" role="group" aria-label="Chart">
       <button type="button" data-chart="donut" aria-pressed="true">Donut</button>
       <button type="button" data-chart="treemap">Treemap</button>
+    </div>
     </div>
     <span class="spacer"></span>
     <button type="button" id="privToggle" class="icon-btn" aria-pressed="false"
@@ -342,6 +354,12 @@
     <div class="sub" id="heroSub"></div>
   </div>
 
+  <div class="tabs" role="tablist" aria-label="View">
+    <button type="button" role="tab" data-tab="allocation" aria-selected="true" aria-controls="tab-allocation">Allocation</button>
+    <button type="button" role="tab" data-tab="grid" aria-selected="false" aria-controls="tab-grid">Market × class</button>
+    <button type="button" role="tab" data-tab="time" aria-selected="false" aria-controls="tab-time" id="timeTab" hidden>Over time</button>
+  </div>
+
   <nav class="crumbs" id="crumbs" aria-label="Drill-down"></nav>
 
   <div class="excl-bar" id="exclBar" hidden>
@@ -349,6 +367,7 @@
     <button type="button" id="exclReset">Show all</button>
   </div>
 
+  <div class="tab-panel" id="tab-allocation" role="tabpanel">
   <div class="card">
     <div class="panel">
       <div class="treemap" id="treemapBox" hidden>
@@ -365,40 +384,6 @@
       <div class="legend" id="legend"></div>
     </div>
   </div>
-
-  <section class="grid-view">
-    <div class="sec-head">
-      <h2 id="gridCaption">Market × asset class</h2>
-      <div class="seg" role="group" aria-label="Rows">
-        <button type="button" data-grid-rows="market" aria-pressed="true">Market</button>
-        <button type="button" data-grid-rows="currency">Currency</button>
-      </div>
-    </div>
-    <div class="card past-card">
-      <div class="table-scroll"><table class="heat" id="heat"></table></div>
-      <div class="heat-scale"><span id="heatLow"></span><span class="bar" id="heatBar"></span><span id="heatHigh"></span></div>
-    </div>
-  </section>
-
-  <section class="past" id="past" hidden>
-    <div class="sec-head">
-      <h2 id="pastCaption">Over time</h2>
-      <div class="seg" role="group" aria-label="Range">
-        <button type="button" data-years="1" aria-pressed="true">1Y</button>
-        <button type="button" data-years="3">3Y</button>
-        <button type="button" data-years="5">5Y</button>
-      </div>
-      <div class="seg" role="group" aria-label="Scale">
-        <button type="button" data-scale="amount" aria-pressed="true">Amount</button>
-        <button type="button" data-scale="share">Share</button>
-      </div>
-    </div>
-    <div class="card past-card" id="pastCard">
-      <svg id="pastChart" role="img" aria-labelledby="pastTitle"><title id="pastTitle">Allocation over time</title></svg>
-      <div class="past-legend" id="pastLegend"></div>
-      <p class="past-msg" id="pastMsg" role="status"></p>
-    </div>
-  </section>
 
   <section class="table-view">
     <h2 id="tableCaption">Breakdown</h2>
@@ -418,6 +403,48 @@
       </table>
     </div>
   </section>
+
+  </div>
+
+  <div class="tab-panel" id="tab-grid" role="tabpanel" hidden>
+  <section class="grid-view">
+    <div class="sec-head">
+      <h2 id="gridCaption">Market × asset class</h2>
+      <div class="seg" role="group" aria-label="Rows">
+        <button type="button" data-grid-rows="market" aria-pressed="true">Market</button>
+        <button type="button" data-grid-rows="currency">Currency</button>
+      </div>
+    </div>
+    <div class="card past-card">
+      <div class="table-scroll"><table class="heat" id="heat"></table></div>
+      <div class="heat-scale"><span id="heatLow"></span><span class="bar" id="heatBar"></span><span id="heatHigh"></span></div>
+    </div>
+  </section>
+
+  </div>
+
+  <div class="tab-panel" id="tab-time" role="tabpanel" hidden>
+  <section class="past">
+    <div class="sec-head">
+      <h2 id="pastCaption">Over time</h2>
+      <div class="seg" role="group" aria-label="Range">
+        <button type="button" data-years="1" aria-pressed="true">1Y</button>
+        <button type="button" data-years="3">3Y</button>
+        <button type="button" data-years="5">5Y</button>
+      </div>
+      <div class="seg" role="group" aria-label="Scale">
+        <button type="button" data-scale="amount" aria-pressed="true">Amount</button>
+        <button type="button" data-scale="share">Share</button>
+      </div>
+    </div>
+    <div class="card past-card" id="pastCard">
+      <svg id="pastChart" role="img" aria-labelledby="pastTitle"><title id="pastTitle">Allocation over time</title></svg>
+      <div class="past-legend" id="pastLegend"></div>
+      <p class="past-msg" id="pastMsg" role="status"></p>
+    </div>
+  </section>
+
+  </div>
 
   <footer id="footer"></footer>
 </div>
@@ -457,7 +484,7 @@ const LEVEL_PLURAL = { market: "Markets", currency: "Currencies", class: "Asset 
 const STORE_KEY = "sure-networth:excluded";
 const PRIVATE_KEY = "sure-networth:private";
 const CHART_KEY = "sure-networth:chart";
-const state = { mode: "assets", level: "class", path: [], excluded: new Set(), private: false, years: 1, scale: "amount", gridRows: "market", chart: "donut" };
+const state = { mode: "assets", level: "class", path: [], excluded: new Set(), private: false, years: 1, scale: "amount", gridRows: "market", chart: "donut", tab: "allocation" };
 
 // Exclusions are stored as "<level>::<value>", not as row references, so one
 // taken at class level still bites after drilling to accounts or holdings, and
@@ -984,6 +1011,7 @@ function renderGrid() {
       b.addEventListener("click", () => {
         state.path = [{ level: rowKey, value: rn, label: rn }, { level: "class", value: cn, label: cn }];
         state.level = "account";
+        state.tab = "allocation";
         navigate();
       });
       td.appendChild(b);
@@ -1035,9 +1063,13 @@ function pastDates(years) {
   return out;
 }
 
+const PAST_LOADING = new Set();
+
 async function loadPast() {
   const years = state.years;
   if (PAST.has(years)) return drawPast();
+  if (PAST_LOADING.has(years)) return;
+  PAST_LOADING.add(years);
   const card = document.getElementById("pastCard");
   const msg = document.getElementById("pastMsg");
   card.classList.add("loading");
@@ -1052,6 +1084,7 @@ async function loadPast() {
   } catch (e) {
     if (years === state.years) msg.textContent = e.message || String(e);
   }
+  PAST_LOADING.delete(years);
   if (years !== state.years) return;
   card.classList.remove("loading");
   drawPast();
@@ -1224,11 +1257,14 @@ function setLevel(level) {
   navigate();
 }
 
+const TABS = ["allocation", "grid", "time"];
+
 function viewHash() {
-  if (state.level === "class" && !state.path.length) return "";
-  const q = new URLSearchParams({ view: state.level });
+  const q = new URLSearchParams();
+  if (state.tab !== "allocation") q.set("tab", state.tab);
+  if (state.level !== "class" || state.path.length) q.set("view", state.level);
   for (const p of state.path) q.set(p.level, p.value);
-  return "#" + q;
+  return q.size ? "#" + q : "";
 }
 
 function readHash() {
@@ -1239,6 +1275,8 @@ function readHash() {
   const known = path.every((p) => DATA.leaves.some((r) => r[p.level] === p.value));
   state.level = known ? level : "class";
   state.path = known ? path : [];
+  const tab = TABS.includes(q.get("tab")) ? q.get("tab") : "allocation";
+  state.tab = tab === "time" && !CONFIG ? "allocation" : tab;
 }
 
 function navigate() {
@@ -1549,6 +1587,9 @@ function render() {
   const segs = segmentsFrom(rows, total);
   renderCrumbs();
   renderExclBar();
+  for (const t of TABS) document.getElementById(`tab-${t}`).hidden = state.tab !== t;
+  for (const b of document.querySelectorAll("[data-tab]")) b.setAttribute("aria-selected", String(b.dataset.tab === state.tab));
+  for (const g of document.querySelectorAll("[data-for]")) g.hidden = !g.dataset.for.split(" ").includes(state.tab);
   document.getElementById("donutBox").hidden = state.chart !== "donut";
   document.getElementById("treemapBox").hidden = state.chart !== "treemap";
   drawDonut(segs, total);
@@ -1560,6 +1601,7 @@ function render() {
   renderCenter();
   renderFooter();
   drawPast();
+  if (state.tab === "time") loadPast();
 
   for (const b of document.querySelectorAll("[data-mode]")) b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode));
   for (const b of document.querySelectorAll("[data-years]")) b.setAttribute("aria-pressed", String(Number(b.dataset.years) === state.years));
@@ -1617,9 +1659,8 @@ function start() {
   loadChart();
   readHash();
   addEventListener("popstate", () => { readHash(); render(); });
-  document.getElementById("past").hidden = !CONFIG;
+  document.getElementById("timeTab").hidden = !CONFIG;
   render();
-  if (CONFIG) loadPast();
 }
 
 async function boot() {
@@ -1662,13 +1703,16 @@ function bindControls() {
     b.addEventListener("click", () => setLevel(b.dataset.level));
   }
   for (const b of document.querySelectorAll("[data-years]")) {
-    b.addEventListener("click", () => { state.years = Number(b.dataset.years); render(); loadPast(); });
+    b.addEventListener("click", () => { state.years = Number(b.dataset.years); render(); });
   }
   for (const b of document.querySelectorAll("[data-scale]")) {
     b.addEventListener("click", () => { state.scale = b.dataset.scale; render(); });
   }
   for (const b of document.querySelectorAll("[data-grid-rows]")) {
     b.addEventListener("click", () => { state.gridRows = b.dataset.gridRows; render(); });
+  }
+  for (const b of document.querySelectorAll("[data-tab]")) {
+    b.addEventListener("click", () => { state.tab = b.dataset.tab; navigate(); });
   }
   for (const b of document.querySelectorAll("[data-chart]")) {
     b.addEventListener("click", () => { state.chart = b.dataset.chart; saveChart(); render(); });
