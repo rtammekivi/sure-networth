@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Regenerate docs/demo.mp4 from docs/demo-data.json, from the repo root:
 
-    nix develop .#demo -c python3 docs/record-demo.py
+    nix develop .#demo -c python3 docs/record-demo.py [--upload]
+
+--upload also uploads it as a GitHub attachment, the only kind of video a
+README plays inline, and points README.md at the new URL.
 """
 
 import json
+import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -17,6 +22,8 @@ import websocket
 
 ROOT = Path(__file__).resolve().parent.parent
 W, H, FPS, PORT = 1100, 780, 12, 9335
+REPO = "rtammekivi/sure-networth"
+ASSET = re.compile(r"https://github\.com/user-attachments/assets/[0-9a-f-]+")
 
 OVERLAY = """
 (() => {
@@ -265,6 +272,21 @@ def record(page):
     page.hold(1.0)
 
 
+def upload(video):
+    gh = lambda *args: subprocess.run(["gh", *args], check=True, capture_output=True, text=True).stdout.strip()
+    repo_id = gh("api", f"repos/{REPO}", "--jq", ".id")
+    req = urllib.request.Request(
+        "https://uploads.github.com/user-attachments/assets"
+        f"?name={video.name}&content_type=video/mp4&repository_id={repo_id}",
+        data=video.read_bytes(), method="POST",
+        headers={"Authorization": f"Bearer {gh('auth', 'token')}", "Accept": "application/json",
+                 "Content-Type": "video/mp4"})
+    url = json.load(urllib.request.urlopen(req))["url"]
+    readme = ROOT / "README.md"
+    readme.write_text(ASSET.sub(url, readme.read_text(), count=1))
+    print(f"uploaded {url} and pointed README.md at it")
+
+
 def main():
     work = Path(tempfile.mkdtemp(prefix="sn-demo-"))
     html = work / "demo.html"
@@ -310,6 +332,8 @@ def main():
                         "-crf", "24", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
                         str(out)], check=True)
         print(f"wrote {out} ({out.stat().st_size // 1024} KiB, {len(page.frames)} frames)")
+        if "--upload" in sys.argv:
+            upload(out)
     finally:
         chrome.terminate()
         chrome.wait()

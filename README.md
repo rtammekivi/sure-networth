@@ -2,9 +2,9 @@
 
 A net-worth allocation donut for [Sure](https://github.com/we-promise/sure), which has none: market or currency → asset class → account → holding, with click-to-drill, a gross-assets / net-worth toggle, exclusions, a private mode that hides amounts but keeps percentages, and the same cut over the last 1, 3 or 5 years.
 
-[Watch the demo](docs/demo.mp4): hovering, drilling from class to holdings, grouping by market, the treemap, the net-worth basis, excluding property, private mode, the market and currency grid, and allocation over time.
+https://github.com/user-attachments/assets/5e52be4f-e4e4-4aa6-b509-e4b28c8b9f7f
 
-The demo runs on made-up data in [`docs/demo-data.json`](docs/demo-data.json); regenerate it with `nix develop .#demo -c python3 docs/record-demo.py`.
+Hovering, drilling from class to holdings, grouping by market, the treemap, the net-worth basis, excluding property, private mode, the market and currency grid, and allocation over time. The demo runs on made-up data in [`docs/demo-data.json`](docs/demo-data.json); regenerate it with `nix develop .#demo -c python3 docs/record-demo.py --upload`, which re-uploads the video and points this README at it.
 
 Every visitor signs in to Sure with their own account (OAuth, PKCE, `read` scope) and sees their own family's numbers. The server keeps no data, no keys and no sessions: the browser holds the token for the life of the tab and passes it along on each request, and the server fetches from Sure, computes, and forgets.
 

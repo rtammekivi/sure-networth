@@ -44,6 +44,7 @@
           packages = with pkgs; [
             chromium
             ffmpeg
+            gh
             (python3.withPackages (ps: [ ps.websocket-client ]))
           ];
 
