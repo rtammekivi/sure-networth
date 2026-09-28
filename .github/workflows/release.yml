@@ -59,7 +59,7 @@ jobs:
   binaries:
     name: ${{ matrix.target }}
     needs: setup
-    if: needs.setup.outputs.build == 'true'
+    if: ${{ !cancelled() && !failure() && needs.setup.outputs.build == 'true' }}
     runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
@@ -111,7 +111,7 @@ jobs:
   image:
     name: image (${{ matrix.arch }})
     needs: setup
-    if: needs.setup.outputs.build == 'true'
+    if: ${{ !cancelled() && !failure() && needs.setup.outputs.build == 'true' }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -166,6 +166,7 @@ jobs:
   merge:
     name: image (manifest)
     needs: [setup, image]
+    if: ${{ !cancelled() && !failure() && needs.setup.outputs.build == 'true' }}
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/download-artifact@v8
@@ -205,7 +206,7 @@ jobs:
 
   chart:
     needs: [setup, merge]
-    if: needs.setup.outputs.build == 'true'
+    if: ${{ !cancelled() && !failure() && needs.setup.outputs.build == 'true' }}
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
@@ -233,6 +234,7 @@ jobs:
 
   assets:
     needs: [setup, binaries, merge, chart]
+    if: ${{ !cancelled() && !failure() && needs.setup.outputs.build == 'true' }}
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/download-artifact@v8
