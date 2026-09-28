@@ -420,7 +420,7 @@ async function signIn() {
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
   const nonce = b64url(crypto.getRandomValues(new Uint8Array(16)));
   const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
-  sessionStorage.setItem(AUTH_KEY, JSON.stringify({ verifier, nonce }));
+  sessionStorage.setItem(AUTH_KEY, JSON.stringify({ verifier, nonce, hash: location.hash }));
   const q = new URLSearchParams({
     response_type: "code", client_id: CONFIG.client_id, redirect_uri: redirectUri(), scope: CONFIG.scope,
     state: nonce, code_challenge: challenge, code_challenge_method: "S256"
@@ -440,9 +440,9 @@ async function signOut() {
 }
 
 async function exchangeCode(q) {
-  history.replaceState(null, "", redirectUri());
   const pending = JSON.parse(sessionStorage.getItem(AUTH_KEY) || "null");
   sessionStorage.removeItem(AUTH_KEY);
+  history.replaceState(null, "", redirectUri() + (pending?.hash || ""));
   if (q.has("error")) throw new Error(q.get("error_description") || q.get("error"));
   if (!pending || pending.nonce !== q.get("state")) throw new Error("Sign-in state did not match.");
   const res = await fetch(`${CONFIG.sure_url}/oauth/token`, {
@@ -712,10 +712,26 @@ function setLevel(level) {
   navigate();
 }
 
+function viewHash() {
+  if (state.level === "class" && !state.path.length) return "";
+  const q = new URLSearchParams({ view: state.level });
+  for (const p of state.path) q.set(p.level, p.value);
+  return "#" + q;
+}
+
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  const level = LEVELS.includes(q.get("view")) ? q.get("view") : "class";
+  const path = LEVELS.filter((l) => depthOf(l) < depthOf(level) && q.has(l))
+    .map((l) => ({ level: l, value: q.get(l), label: q.get(l) }));
+  const known = path.every((p) => DATA.leaves.some((r) => r[p.level] === p.value));
+  state.level = known ? level : "class";
+  state.path = known ? path : [];
+}
+
 function navigate() {
-  const nav = { level: state.level, path: state.path };
-  const cur = history.state;
-  if (!cur || JSON.stringify(cur) !== JSON.stringify(nav)) history.pushState(nav, "");
+  const hash = viewHash();
+  if (hash !== location.hash) history.pushState(null, "", hash || location.pathname + location.search);
   render();
 }
 
@@ -1076,13 +1092,8 @@ function start() {
   setInterval(renderFreshness, 60000);
   loadExclusions();
   loadPrivate();
-  history.replaceState({ level: state.level, path: state.path }, "");
-  addEventListener("popstate", (e) => {
-    if (!e.state) return;
-    state.level = e.state.level;
-    state.path = e.state.path;
-    render();
-  });
+  readHash();
+  addEventListener("popstate", () => { readHash(); render(); });
   render();
 }
 
