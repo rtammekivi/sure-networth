@@ -306,7 +306,7 @@ async fn register(State(s): State<Shared>, Json(req): Json<RegisterRequest>) -> 
     }
     let url = format!("{}/register", s.settings.sure_url.trim_end_matches('/'));
     let body = serde_json::json!({
-        "client_name": "Net worth allocation",
+        "client_name": "Sure Net Worth",
         "redirect_uris": [req.redirect_uri],
     });
     let res = match s.http.post(url).json(&body).send().await {

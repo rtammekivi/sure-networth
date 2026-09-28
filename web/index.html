@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Net worth allocation</title>
+<title>Sure Net Worth</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22 fill=%22none%22 stroke-width=%226%22%3E%3Cpath d=%22M17.28 5.58A10.5 10.5 0 1 1 12.10 25.75%22 stroke=%22%232a78d6%22/%3E%3Cpath d=%22M9.86 24.52A10.5 10.5 0 0 1 6.82 10.91%22 stroke=%22%23eb6834%22/%3E%3Cpath d=%22M8.32 8.84A10.5 10.5 0 0 1 14.72 5.58%22 stroke=%22%231baf7a%22/%3E%3C/svg%3E">
 <style>
   :root {
     color-scheme: light;
@@ -78,6 +79,7 @@
 
   header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
   h1 { font-size: 18px; font-weight: 600; margin: 0; }
+  .logo { width: 26px; height: 26px; flex: 0 0 auto; margin-right: -4px; }
   .as-of { color: var(--text-muted); font-size: 13px; }
   .spacer { flex: 1; }
 
@@ -314,7 +316,8 @@
 </div>
 <div class="wrap" id="app" hidden>
   <header>
-    <h1>Net worth allocation</h1>
+    <svg class="logo" viewBox="0 0 32 32" fill="none" stroke-width="6" aria-hidden="true"><path d="M17.28 5.58A10.5 10.5 0 1 1 12.10 25.75" stroke="#2a78d6"/><path d="M9.86 24.52A10.5 10.5 0 0 1 6.82 10.91" stroke="#eb6834"/><path d="M8.32 8.84A10.5 10.5 0 0 1 14.72 5.58" stroke="#1baf7a"/></svg>
+    <h1>Sure Net Worth</h1>
     <span class="as-of" id="asOf"></span>
     <span class="spacer"></span>
     <button type="button" id="privToggle" class="icon-btn" aria-pressed="false"
@@ -1364,6 +1367,7 @@ function setLevel(level) {
 }
 
 const TABS = ["allocation", "grid", "time"];
+const TAB_NAME = { allocation: "Allocation", grid: "Grid", time: "Over time" };
 
 function viewHash() {
   const q = new URLSearchParams();
@@ -1694,6 +1698,7 @@ function render() {
   renderCrumbs();
   renderExclBar();
   for (const t of TABS) document.getElementById(`tab-${t}`).hidden = state.tab !== t;
+  document.title = `${TAB_NAME[state.tab]} · Sure Net Worth`;
   for (const b of document.querySelectorAll("[data-tab]")) b.setAttribute("aria-selected", String(b.dataset.tab === state.tab));
   for (const g of document.querySelectorAll("[data-for]")) g.hidden = !g.dataset.for.split(" ").includes(state.tab);
   document.getElementById("donutBox").hidden = state.chart !== "donut";

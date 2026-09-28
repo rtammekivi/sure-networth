@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Set up · Net worth allocation</title>
+<title>Set up · Sure Net Worth</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22 fill=%22none%22 stroke-width=%226%22%3E%3Cpath d=%22M17.28 5.58A10.5 10.5 0 1 1 12.10 25.75%22 stroke=%22%232a78d6%22/%3E%3Cpath d=%22M9.86 24.52A10.5 10.5 0 0 1 6.82 10.91%22 stroke=%22%23eb6834%22/%3E%3Cpath d=%22M8.32 8.84A10.5 10.5 0 0 1 14.72 5.58%22 stroke=%22%231baf7a%22/%3E%3C/svg%3E">
 <style>
   :root {
     color-scheme: light dark;
@@ -37,7 +38,8 @@
     font: 14px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   .wrap { max-width: 760px; margin: 0 auto; }
-  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; display: flex; align-items: center; gap: 10px; }
+  .logo { width: 28px; height: 28px; flex: 0 0 auto; }
   .lede { color: var(--text-secondary); margin: 0 0 28px; }
   ol { list-style: none; padding: 0; margin: 0; counter-reset: step; display: flex; flex-direction: column; gap: 16px; }
   li {
@@ -86,7 +88,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Set up the net worth page</h1>
+  <h1><svg class="logo" viewBox="0 0 32 32" fill="none" stroke-width="6" aria-hidden="true"><path d="M17.28 5.58A10.5 10.5 0 1 1 12.10 25.75" stroke="#2a78d6"/><path d="M9.86 24.52A10.5 10.5 0 0 1 6.82 10.91" stroke="#eb6834"/><path d="M8.32 8.84A10.5 10.5 0 0 1 14.72 5.58" stroke="#1baf7a"/></svg>Set up Sure Net Worth</h1>
   <p class="lede">
     Every visitor signs in to <strong id="sureUrl">Sure</strong> with their own account and sees their own
     family's numbers. This server stores no data and no keys; it only needs to know which OAuth client to use.
@@ -98,7 +100,7 @@
       <p>Sure's OAuth application admin is open only to the instance's <code>super_admin</code> (the account
         that set Sure up), not to family admins. Open it and fill in:</p>
       <table>
-        <tr><th>Name</th><td><code>Net worth allocation</code></td></tr>
+        <tr><th>Name</th><td><code>Sure Net Worth</code></td></tr>
         <tr><th>Redirect URI</th><td><code id="redirect"></code></td></tr>
         <tr><th>Confidential</th><td>unticked — the page is a public client using PKCE</td></tr>
         <tr><th>Scopes</th><td><code>read</code></td></tr>
