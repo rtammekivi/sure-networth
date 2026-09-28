@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/rtammekivi/sure-networth/compare/v0.2.0...v0.3.0) (2026-09-28)
+
+
+### Features
+
+* **web:** logo, favicon and Sure Net Worth as the page title ([2a3cb20](https://github.com/rtammekivi/sure-networth/commit/2a3cb20d32e805c82a579063dfbd766583eb8e1c))
+* **web:** pulsing placeholder columns while history loads ([c3bd9d3](https://github.com/rtammekivi/sure-networth/commit/c3bd9d36b2759c7b3e84fa87e4e96f0a7562f200))
+
 ## [0.2.0](https://github.com/rtammekivi/sure-networth/compare/v0.1.1...v0.2.0) (2026-09-28)
 
 
