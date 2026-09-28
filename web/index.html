@@ -239,7 +239,23 @@
   .past-card svg { width: 100%; height: 240px; display: block; overflow: visible; transition: opacity .12s ease; }
   .past-card .ghost { fill: var(--gridline); animation: ghost 1.4s ease-in-out infinite; }
   @keyframes ghost { 50% { opacity: .35; } }
-  @media (prefers-reduced-motion: reduce) { .past-card .ghost { animation: none; } }
+  .sk { display: block; background: var(--gridline); border-radius: 6px; animation: ghost 1.4s ease-in-out infinite; }
+  .sk-ring { fill: none; stroke: var(--gridline); stroke-width: 30; animation: ghost 1.4s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { .past-card .ghost, .sk, .sk-ring { animation: none; } }
+  .skeleton[hidden] { display: none; }
+  .sk-tabs { gap: 20px; padding: 10px 12px; }
+  .sk-tab { width: 72px; height: 16px; }
+  .sk-tab-short { width: 40px; }
+  .controls .sk-ctl { width: 200px; height: 34px; border-radius: 8px; }
+  .controls .sk-ctl-wide { width: 440px; max-width: 60vw; }
+  .sk-k { width: 96px; height: 11px; }
+  .sk-hero { width: 330px; max-width: 80vw; height: 44px; margin: 10px 0; border-radius: 8px; }
+  .sk-sub { width: 220px; height: 12px; }
+  .sk-legend-row { display: flex; align-items: center; gap: 12px; padding: 12px 10px; }
+  .sk-swatch { width: 10px; height: 10px; border-radius: 2px; }
+  .sk-name { height: 12px; flex: 0 0 auto; }
+  .sk-w1 { width: 120px; } .sk-w2 { width: 90px; } .sk-w3 { width: 150px; }
+  .sk-val { width: 70px; height: 12px; margin-left: auto; }
   .past-card .col { outline: none; }
   .past-card .col-hit { fill: transparent; }
   .past-card .col:hover .col-hit, .past-card .col:focus-visible .col-hit { fill: var(--wash); }
@@ -310,8 +326,32 @@
 </style>
 </head>
 <body>
-<div class="gate" id="gate" role="status">
-  <p id="gateMsg">Loading…</p>
+<div class="wrap skeleton" id="skeleton" role="status" aria-busy="true">
+  <span class="sr-only">Loading from Sure…</span>
+  <header>
+    <svg class="logo" viewBox="0 0 32 32" fill="none" stroke-width="6" aria-hidden="true"><path d="M17.28 5.58A10.5 10.5 0 1 1 12.10 25.75" stroke="#2a78d6"/><path d="M9.86 24.52A10.5 10.5 0 0 1 6.82 10.91" stroke="#eb6834"/><path d="M8.32 8.84A10.5 10.5 0 0 1 14.72 5.58" stroke="#1baf7a"/></svg>
+    <h1>Sure Net Worth</h1>
+  </header>
+  <div class="tabs sk-tabs"><span class="sk sk-tab"></span><span class="sk sk-tab sk-tab-short"></span><span class="sk sk-tab"></span></div>
+  <div class="controls"><span class="sk sk-ctl"></span><span class="sk sk-ctl sk-ctl-wide"></span></div>
+  <div class="hero-block"><span class="sk sk-k"></span><span class="sk sk-hero"></span><span class="sk sk-sub"></span></div>
+  <div class="card">
+    <div class="panel">
+      <div class="chart"><svg viewBox="0 0 200 200" aria-hidden="true"><circle class="sk-ring" cx="100" cy="100" r="73"/></svg></div>
+      <div class="legend">
+        <div class="sk-legend-row"><span class="sk sk-swatch"></span><span class="sk sk-name sk-w1"></span><span class="sk sk-val"></span></div>
+        <div class="sk-legend-row"><span class="sk sk-swatch"></span><span class="sk sk-name sk-w2"></span><span class="sk sk-val"></span></div>
+        <div class="sk-legend-row"><span class="sk sk-swatch"></span><span class="sk sk-name sk-w3"></span><span class="sk sk-val"></span></div>
+        <div class="sk-legend-row"><span class="sk sk-swatch"></span><span class="sk sk-name sk-w1"></span><span class="sk sk-val"></span></div>
+        <div class="sk-legend-row"><span class="sk sk-swatch"></span><span class="sk sk-name sk-w2"></span><span class="sk sk-val"></span></div>
+        <div class="sk-legend-row"><span class="sk sk-swatch"></span><span class="sk sk-name sk-w3"></span><span class="sk sk-val"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="gate" id="gate" role="status" hidden>
+  <p id="gateMsg"></p>
   <button type="button" id="signIn" hidden>Sign in with Sure</button>
 </div>
 <div class="wrap" id="app" hidden>
@@ -1749,6 +1789,7 @@ function renderFreshness() {
   el.title = DATA.generated_at;
 }
 function showGate(msg, offerSignIn) {
+  document.getElementById("skeleton").hidden = true;
   document.getElementById("app").hidden = true;
   document.getElementById("gate").hidden = false;
   document.getElementById("gateMsg").textContent = msg;
@@ -1760,6 +1801,7 @@ function start() {
   money2 = new Intl.NumberFormat("en-IE", { style: "currency", currency: DATA.currency, minimumFractionDigits: 2, maximumFractionDigits: 2 });
   compact = new Intl.NumberFormat("en-IE", { style: "currency", currency: DATA.currency, notation: "compact", maximumFractionDigits: 1 });
   document.getElementById("gate").hidden = true;
+  document.getElementById("skeleton").hidden = true;
   document.getElementById("app").hidden = false;
   document.getElementById("signOut").hidden = !CONFIG;
   bindControls();
@@ -1789,7 +1831,6 @@ async function boot() {
       const fresh = q.has("code") || q.has("error");
       const tok = fresh ? await exchangeCode(q) : sessionStorage.getItem(TOKEN_KEY);
       if (!tok) return signIn();
-      showGate("Loading from Sure…", false);
       const date = new Date().toLocaleDateString("sv-SE");
       const res = await fetch(`api/allocation?date=${date}`, { headers: { Authorization: `Bearer ${tok}` } });
       if (res.status === 401) {
