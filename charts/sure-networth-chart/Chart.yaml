@@ -9,5 +9,5 @@ keywords:
   - sure
   - finance
   - net-worth
-version: 0.1.1 # x-release-please-version
-appVersion: "0.1.1" # x-release-please-version
+version: 0.2.0 # x-release-please-version
+appVersion: "0.2.0" # x-release-please-version
