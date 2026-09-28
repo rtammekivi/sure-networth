@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate docs/demo.gif from docs/demo-data.json, from the repo root:
+"""Regenerate docs/demo.mp4 from docs/demo-data.json, from the repo root:
 
     nix develop .#demo -c python3 docs/record-demo.py
 """
@@ -304,18 +304,11 @@ def main():
         for i, data in enumerate(page.frames):
             (frames / f"{i:05d}.png").write_bytes(base64.b64decode(data))
 
-        palette = work / "palette.png"
-        raw = work / "raw.gif"
-        scale = "scale=880:-1:flags=lanczos"
+        out = ROOT / "docs/demo.mp4"
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FPS),
-                        "-i", str(frames / "%05d.png"), "-vf", f"{scale},palettegen=stats_mode=diff",
-                        str(palette)], check=True)
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FPS),
-                        "-i", str(frames / "%05d.png"), "-i", str(palette), "-lavfi",
-                        f"{scale}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle",
-                        str(raw)], check=True)
-        out = ROOT / "docs/demo.gif"
-        subprocess.run(["gifsicle", "-O3", "--lossy=40", str(raw), "-o", str(out)], check=True)
+                        "-i", str(frames / "%05d.png"), "-c:v", "libx264", "-preset", "slow",
+                        "-crf", "24", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                        str(out)], check=True)
         print(f"wrote {out} ({out.stat().st_size // 1024} KiB, {len(page.frames)} frames)")
     finally:
         chrome.terminate()

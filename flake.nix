@@ -34,7 +34,7 @@
               echo "  cargo run -- serve                         serve on :8080"
               echo "  cargo run -- render --open                 bake a standalone page"
               echo "  helm lint charts/sure-networth-chart       lint the chart"
-              echo "  nix develop .#demo                         shell for recording the demo GIF"
+              echo "  nix develop .#demo                         shell for recording the demo video"
               echo
             fi
           '';
@@ -44,7 +44,6 @@
           packages = with pkgs; [
             chromium
             ffmpeg
-            gifsicle
             (python3.withPackages (ps: [ ps.websocket-client ]))
           ];
 
@@ -52,7 +51,7 @@
             if [ -t 1 ]; then
               echo "sure-networth demo shell"
               echo
-              echo "  python3 docs/record-demo.py                regenerate docs/demo.gif"
+              echo "  python3 docs/record-demo.py                regenerate docs/demo.mp4"
               echo
             fi
           '';
