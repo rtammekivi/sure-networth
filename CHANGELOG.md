@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/rtammekivi/sure-networth/compare/v0.4.1...v0.4.2) (2026-09-28)
+
+
+### Bug Fixes
+
+* **web:** show the month total in over-time tooltips ([d9aefd2](https://github.com/rtammekivi/sure-networth/commit/d9aefd2a3f9332f306f29c90ec8348a5291000bc))
+
 ## [0.4.1](https://github.com/rtammekivi/sure-networth/compare/v0.4.0...v0.4.1) (2026-09-28)
 
 
