@@ -70,6 +70,8 @@ The file is **re-read whenever it changes**; no restart. A file that fails to pa
 
 **Currency** is what each holding is priced in, or the account's currency for cash and whole accounts.
 
+**Market × asset class** (or currency × asset class) is a grid of the same leaves, shaded by value; clicking a cell drills to the accounts in it.
+
 **Over time** rebuilds the allocation at each past month-end (quarter-end for 3 and 5 years) from Sure's daily `/balances` and `/holdings`, converted at that day's ECB rates. It follows the current cut, basis and exclusions, and is not available in a `render`ed static page.
 
 ## Run

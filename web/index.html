@@ -206,8 +206,8 @@
   .tip .row .pc { color: var(--text-muted); font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 10px; }
 
   section.past { margin-top: 24px; }
-  .past-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-  .past-head h2 { flex: 1; margin: 0; }
+  .sec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .sec-head h2 { flex: 1; margin: 0; }
   .past-card { padding: 16px 16px 12px; }
   .past-card svg { width: 100%; height: 240px; display: block; overflow: visible; transition: opacity .12s ease; }
   .past-card.loading svg { opacity: .45; }
@@ -218,6 +218,25 @@
   .past-legend span { display: inline-flex; align-items: center; gap: 7px; }
   .past-msg { font-size: 13px; color: var(--text-secondary); margin: 8px 0 0; }
   .past-msg:empty { display: none; }
+
+  section.grid-view { margin-top: 24px; }
+  .heat { border-collapse: separate; border-spacing: 2px; font-size: 12px; }
+  .heat th, .heat td { padding: 6px 8px; text-align: right; }
+  .heat thead th { border-bottom: 0; text-align: center; }
+  .heat tbody tr + tr td { border-top: 0; }
+  .heat tbody th { text-align: left; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+  .heat td.c { padding: 0; min-width: 76px; }
+  .heat td.tot, .heat tfoot td { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .heat tfoot td { border-top: 1px solid var(--baseline); }
+  .heat .cell {
+    display: block; width: 100%; min-height: 44px; padding: 6px 8px; border: 0; border-radius: 4px;
+    font: inherit; font-variant-numeric: tabular-nums; text-align: center; cursor: pointer;
+  }
+  .heat .cell .pc { display: block; font-size: 11px; opacity: .8; }
+  .heat .cell:hover, .heat .cell:focus-visible { outline: 2px solid var(--text-primary); outline-offset: -1px; }
+  .heat .empty { display: block; min-height: 44px; line-height: 32px; padding: 6px 8px; border-radius: 4px; background: var(--wash); color: var(--text-muted); text-align: center; }
+  .heat-scale { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 11px; color: var(--text-muted); }
+  .heat-scale .bar { width: 160px; height: 8px; border-radius: 2px; }
 
   section.table-view { margin-top: 24px; }
   h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin: 0 0 10px; }
@@ -332,8 +351,22 @@
     </div>
   </div>
 
+  <section class="grid-view">
+    <div class="sec-head">
+      <h2 id="gridCaption">Market × asset class</h2>
+      <div class="seg" role="group" aria-label="Rows">
+        <button type="button" data-grid-rows="market" aria-pressed="true">Market</button>
+        <button type="button" data-grid-rows="currency">Currency</button>
+      </div>
+    </div>
+    <div class="card past-card">
+      <div class="table-scroll"><table class="heat" id="heat"></table></div>
+      <div class="heat-scale"><span id="heatLow"></span><span class="bar" id="heatBar"></span><span id="heatHigh"></span></div>
+    </div>
+  </section>
+
   <section class="past" id="past" hidden>
-    <div class="past-head">
+    <div class="sec-head">
       <h2 id="pastCaption">Over time</h2>
       <div class="seg" role="group" aria-label="Range">
         <button type="button" data-years="1" aria-pressed="true">1Y</button>
@@ -408,7 +441,7 @@ const LEVEL_PLURAL = { market: "Markets", currency: "Currencies", class: "Asset 
 
 const STORE_KEY = "sure-networth:excluded";
 const PRIVATE_KEY = "sure-networth:private";
-const state = { mode: "assets", level: "class", path: [], excluded: new Set(), private: false, years: 1, scale: "amount" };
+const state = { mode: "assets", level: "class", path: [], excluded: new Set(), private: false, years: 1, scale: "amount", gridRows: "market" };
 
 // Exclusions are stored as "<level>::<value>", not as row references, so one
 // taken at class level still bites after drilling to accounts or holdings, and
@@ -735,6 +768,123 @@ function blurSeg() {
   renderCenter();
 }
 
+/* ---- grid -------------------------------------------------------------- */
+
+const SEQ = { light: ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5",
+                      "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"] };
+SEQ.dark = [...SEQ.light].reverse();
+
+function seqColor(t) {
+  const ramp = SEQ[isDark() ? "dark" : "light"];
+  const x = Math.min(Math.max(t, 0), 1) * (ramp.length - 1);
+  const i = Math.min(Math.floor(x), ramp.length - 2), f = x - i;
+  const [a, b] = [ramp[i], ramp[i + 1]].map((h) => parseInt(h.slice(1), 16));
+  const ch = (sh) => Math.round(((a >> sh) & 255) * (1 - f) + ((b >> sh) & 255) * f);
+  return "#" + ((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, "0");
+}
+
+function ordered(totals, order) {
+  const known = order.filter((k) => totals.has(k));
+  const rest = [...totals.keys()].filter((k) => !order.includes(k)).sort((a, b) => totals.get(b) - totals.get(a));
+  return [...known, ...rest].filter((k) => totals.get(k) > 0.005);
+}
+
+function renderGrid() {
+  const rowKey = state.gridRows;
+  const cells = new Map(), rowTot = new Map(), colTot = new Map();
+  let total = 0;
+  for (const r of filtered(leaves())) {
+    if (leafExcluded(r)) continue;
+    const k = `${r[rowKey]}::${r.class}`;
+    cells.set(k, (cells.get(k) || 0) + r.value);
+    rowTot.set(r[rowKey], (rowTot.get(r[rowKey]) || 0) + r.value);
+    colTot.set(r.class, (colTot.get(r.class) || 0) + r.value);
+    total += r.value;
+  }
+  const rowNames = ordered(rowTot, rowKey === "market" ? DATA.market_order : []);
+  const colNames = ordered(colTot, DATA.class_order);
+  const max = Math.max(0, ...cells.values());
+  const share = (v) => pct(total ? v / total : 0);
+  const cellText = (v) => (state.private ? share(v) : compact.format(v));
+
+  document.getElementById("gridCaption").textContent = `${LEVEL_NAME[rowKey]} × asset class`
+    + (state.path.length ? " · " + state.path.map((p) => p.label).join(" › ") : "");
+  const table = document.getElementById("heat");
+  table.textContent = "";
+  const tr = (...cols) => { const row = document.createElement("tr"); row.append(...cols); return row; };
+  const cell = (tag, text, cls) => {
+    const c = document.createElement(tag);
+    if (cls) c.className = cls;
+    if (text != null) c.textContent = text;
+    return c;
+  };
+
+  const head = document.createElement("thead");
+  const corner = cell("th", "");
+  corner.scope = "col";
+  head.appendChild(tr(corner, ...colNames.map((c) => Object.assign(cell("th", c), { scope: "col" })),
+    Object.assign(cell("th", "Total"), { scope: "col" })));
+
+  const body = document.createElement("tbody");
+  for (const rn of rowNames) {
+    const th = cell("th", rn);
+    th.scope = "row";
+    const tds = colNames.map((cn) => {
+      const v = cells.get(`${rn}::${cn}`) || 0;
+      const td = cell("td", null, "c");
+      if (v <= 0.005) { td.appendChild(cell("span", "—", "empty")); return td; }
+      const bg = seqColor(max ? Math.sqrt(v / max) : 0);
+      const b = cell("button", null, "cell");
+      b.type = "button";
+      b.style.background = bg;
+      b.style.color = luminance(bg) > 0.3 ? "#0b0b0b" : "#ffffff";
+      b.append(document.createTextNode(cellText(v)));
+      if (!state.private) b.appendChild(cell("span", share(v), "pc"));
+      b.setAttribute("aria-label", `${rn}, ${cn}: ` + (state.private ? share(v) : `${money.format(v)}, ${share(v)}`));
+      const show = () => showGridTip(rn, cn, v, rowTot.get(rn), colTot.get(cn), total);
+      b.addEventListener("pointerenter", (ev) => { show(); place(ev.clientX + 14, ev.clientY + 14, pastTip); });
+      b.addEventListener("pointermove", (ev) => place(ev.clientX + 14, ev.clientY + 14, pastTip));
+      b.addEventListener("pointerleave", () => { pastTip.dataset.show = "false"; });
+      b.addEventListener("focus", () => { show(); const r = b.getBoundingClientRect(); place(r.right + 8, r.top, pastTip); });
+      b.addEventListener("blur", () => { pastTip.dataset.show = "false"; });
+      b.addEventListener("click", () => {
+        state.path = [{ level: rowKey, value: rn, label: rn }, { level: "class", value: cn, label: cn }];
+        state.level = "account";
+        navigate();
+      });
+      td.appendChild(b);
+      return td;
+    });
+    const tot = amount(cell("td", null, "tot"), m(rowTot.get(rn)));
+    body.appendChild(tr(th, ...tds, tot));
+  }
+
+  const foot = document.createElement("tfoot");
+  foot.appendChild(tr(cell("td", "Total"), ...colNames.map((cn) => amount(cell("td"), m(colTot.get(cn)))),
+    amount(cell("td"), m(total))));
+  table.append(head, body, foot);
+
+  const ramp = SEQ[isDark() ? "dark" : "light"];
+  document.getElementById("heatBar").style.background = `linear-gradient(to right, ${ramp.join(", ")})`;
+  document.getElementById("heatLow").textContent = state.private ? "0%" : compact.format(0);
+  document.getElementById("heatHigh").textContent = state.private ? share(max) : compact.format(max);
+}
+
+function showGridTip(rn, cn, v, rowTotal, colTotal, total) {
+  pastTip.textContent = "";
+  const line = (cls, text) => {
+    const d = document.createElement("div");
+    d.className = cls;
+    d.textContent = text;
+    pastTip.appendChild(d);
+  };
+  line("v", state.private ? pct(total ? v / total : 0) : money.format(v));
+  line("n", `${rn} · ${cn}`);
+  line("n", `${pct(v / rowTotal)} of ${rn} · ${pct(v / colTotal)} of ${cn}`);
+  if (!state.private) line("n", `${pct(total ? v / total : 0)} of total`);
+  pastTip.dataset.show = "true";
+}
+
 /* ---- over time --------------------------------------------------------- */
 
 const PAST = new Map();
@@ -811,7 +961,6 @@ function drawPast() {
     + (state.path.length ? " · " + state.path.map((p) => p.label).join(" › ") : "");
   if (!PAST.has(state.years)) return;
 
-  compact ||= new Intl.NumberFormat("en-IE", { style: "currency", currency: DATA.currency, notation: "compact", maximumFractionDigits: 1 });
   const NS = "http://www.w3.org/2000/svg";
   const el = (tag, attrs) => {
     const e = document.createElementNS(NS, tag);
@@ -1269,6 +1418,7 @@ function render() {
   drawDonut(segs, total);
   renderLegend(segs, ramp, rows.filter((r) => r.excluded));
   renderTable(rows, total, ramp);
+  renderGrid();
   renderHero();
   renderCenter();
   renderFooter();
@@ -1277,6 +1427,7 @@ function render() {
   for (const b of document.querySelectorAll("[data-mode]")) b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode));
   for (const b of document.querySelectorAll("[data-years]")) b.setAttribute("aria-pressed", String(Number(b.dataset.years) === state.years));
   for (const b of document.querySelectorAll("[data-scale]")) b.setAttribute("aria-pressed", String(b.dataset.scale === state.scale));
+  for (const b of document.querySelectorAll("[data-grid-rows]")) b.setAttribute("aria-pressed", String(b.dataset.gridRows === state.gridRows));
   for (const b of document.querySelectorAll("[data-level]")) b.setAttribute("aria-pressed", String(b.dataset.level === state.level));
   // Pressed means "amounts are hidden", which is also what swaps the eye for
   // the struck-through one and flips the label the tooltip offers.
@@ -1316,6 +1467,7 @@ function showGate(msg, offerSignIn) {
 function start() {
   money = new Intl.NumberFormat("en-IE", { style: "currency", currency: DATA.currency, maximumFractionDigits: 0 });
   money2 = new Intl.NumberFormat("en-IE", { style: "currency", currency: DATA.currency, minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  compact = new Intl.NumberFormat("en-IE", { style: "currency", currency: DATA.currency, notation: "compact", maximumFractionDigits: 1 });
   document.getElementById("gate").hidden = true;
   document.getElementById("app").hidden = false;
   document.getElementById("signOutBox").hidden = !CONFIG;
@@ -1375,6 +1527,9 @@ function bindControls() {
   }
   for (const b of document.querySelectorAll("[data-scale]")) {
     b.addEventListener("click", () => { state.scale = b.dataset.scale; render(); });
+  }
+  for (const b of document.querySelectorAll("[data-grid-rows]")) {
+    b.addEventListener("click", () => { state.gridRows = b.dataset.gridRows; render(); });
   }
   addEventListener("resize", () => requestAnimationFrame(drawPast));
   for (const b of document.querySelectorAll("[data-theme-set]")) {
