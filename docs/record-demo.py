@@ -254,8 +254,10 @@ def record(page):
     page.move(q('[data-tab="time"]'))
     page.click()
     page.hold(1.4)
-    page.move("document.querySelectorAll('#pastChart .col')[4]")
-    page.hold(1.6)
+    page.move("document.querySelectorAll('#pastChart .col')[4].querySelectorAll('.bar')[1]")
+    page.hold(1.4)
+    page.move("document.querySelectorAll('#pastChart .col')[4]", dy=-70)
+    page.hold(1.4)
 
     page.caption("As shares of the whole")
     page.move(q('[data-scale="share"]'))

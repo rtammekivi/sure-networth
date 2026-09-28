@@ -2,7 +2,7 @@
 
 Net-worth allocation charts for [Sure](https://github.com/we-promise/sure).
 
-https://github.com/user-attachments/assets/5e52be4f-e4e4-4aa6-b509-e4b28c8b9f7f
+https://github.com/user-attachments/assets/69cea922-e838-400d-b8e4-3eaac7652339
 
 - **Allocation** — donut or treemap, grouped by market, currency, asset class, account or holding; click to drill in.
 - **Grid** — market or currency × asset class.
