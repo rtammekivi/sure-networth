@@ -1241,7 +1241,8 @@ function drawPast() {
   dates.forEach((d, i) => {
     const x = L + band * i;
     const g = el("g", { class: "col", tabindex: 0 });
-    g.appendChild(el("rect", { class: "col-hit", x, y: T, width: band, height: H - T - B, rx: 6 }));
+    const hit = el("rect", { class: "col-hit", x, y: T, width: band, height: H - T - B, rx: 6 });
+    g.appendChild(hit);
     const stack = series.filter((s) => s.values[i] > 0);
     const label = i === dates.length - 1 ? "Now" : monthLabel(d);
     let acc = 0;
@@ -1261,6 +1262,9 @@ function drawPast() {
       g.appendChild(bar);
     });
     g.setAttribute("aria-label", `${label}: ` + (state.private ? `${stack.length} series` : money.format(totals[i])));
+    hit.addEventListener("pointerenter", (ev) => { showPastTotal(label, totals[i]); place(ev.clientX + 14, ev.clientY + 14, pastTip); });
+    hit.addEventListener("pointermove", (ev) => place(ev.clientX + 14, ev.clientY + 14, pastTip));
+    hit.addEventListener("pointerleave", () => { pastTip.dataset.show = "false"; });
     g.addEventListener("focus", () => { showPastTotal(label, totals[i]); const b = g.getBoundingClientRect(); place(b.right + 8, b.top + 20, pastTip); });
     g.addEventListener("blur", () => { pastTip.dataset.show = "false"; });
     svg.appendChild(g);
@@ -1368,14 +1372,14 @@ function showPastTip(label, s, v, total, ramp) {
   nm.className = "nm";
   nm.textContent = s.name;
   n.append(key, nm);
-  tipLine("n", state.private ? label : `${share} of ${label}`);
+  tipLine("n", state.private ? label : `${share} of ${money.format(total)} · ${label}`);
   pastTip.dataset.show = "true";
 }
 
 function showPastTotal(label, total) {
   pastTip.textContent = "";
   tipLine("v", state.private ? label : money.format(total));
-  if (!state.private) tipLine("n", label);
+  if (!state.private) tipLine("n", `Total · ${label}`);
   pastTip.dataset.show = "true";
 }
 
