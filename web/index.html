@@ -138,6 +138,13 @@
   .chart path.seg-arc:focus-visible { outline: none; }
   .chart g.seg:focus-visible path.seg-arc { stroke: var(--text-primary); stroke-width: 1.5; }
 
+  .treemap { flex: 1 1 480px; min-width: 300px; height: 340px; }
+  .treemap[hidden] { display: none; }
+  .treemap svg { width: 100%; height: 100%; display: block; }
+  .treemap .tile { cursor: pointer; outline: none; }
+  .treemap .tile[data-leaf="true"] { cursor: default; }
+  .treemap .tile:hover rect, .treemap .tile:focus-visible rect { stroke: var(--text-primary); stroke-width: 1.5; }
+
   .center {
     position: absolute; inset: 0; display: flex; flex-direction: column;
     align-items: center; justify-content: center; text-align: center;
@@ -307,6 +314,11 @@
       <button type="button" data-level="account">Account</button>
       <button type="button" data-level="item">Holding</button>
     </div>
+    <span class="ctl-label" style="margin-left:8px">Chart</span>
+    <div class="seg" role="group" aria-label="Chart">
+      <button type="button" data-chart="donut" aria-pressed="true">Donut</button>
+      <button type="button" data-chart="treemap">Treemap</button>
+    </div>
     <span class="spacer"></span>
     <button type="button" id="privToggle" class="icon-btn" aria-pressed="false"
             title="Hide amounts, keep percentages (H)" aria-label="Hide amounts, keep percentages">
@@ -339,7 +351,10 @@
 
   <div class="card">
     <div class="panel">
-      <div class="chart">
+      <div class="treemap" id="treemapBox" hidden>
+        <svg id="treemap" role="img" aria-labelledby="treemapTitle"><title id="treemapTitle">Allocation treemap</title></svg>
+      </div>
+      <div class="chart" id="donutBox">
         <svg id="donut" viewBox="0 0 200 200" role="img" aria-labelledby="donutTitle"><title id="donutTitle">Allocation donut</title></svg>
         <div class="center">
           <div class="k" id="centerKey"></div>
@@ -441,7 +456,8 @@ const LEVEL_PLURAL = { market: "Markets", currency: "Currencies", class: "Asset 
 
 const STORE_KEY = "sure-networth:excluded";
 const PRIVATE_KEY = "sure-networth:private";
-const state = { mode: "assets", level: "class", path: [], excluded: new Set(), private: false, years: 1, scale: "amount", gridRows: "market" };
+const CHART_KEY = "sure-networth:chart";
+const state = { mode: "assets", level: "class", path: [], excluded: new Set(), private: false, years: 1, scale: "amount", gridRows: "market", chart: "donut" };
 
 // Exclusions are stored as "<level>::<value>", not as row references, so one
 // taken at class level still bites after drilling to accounts or holdings, and
@@ -464,6 +480,13 @@ function loadPrivate() {
 }
 function savePrivate() {
   try { localStorage.setItem(PRIVATE_KEY, state.private ? "1" : "0"); } catch { /* ignore */ }
+}
+
+function loadChart() {
+  try { state.chart = localStorage.getItem(CHART_KEY) === "treemap" ? "treemap" : "donut"; } catch { /* ignore */ }
+}
+function saveChart() {
+  try { localStorage.setItem(CHART_KEY, state.chart); } catch { /* ignore */ }
 }
 
 let money, money2;
@@ -725,6 +748,117 @@ function drawDonut(segs, total) {
     svg.appendChild(g);
     s._g = g;
   });
+}
+
+/* ---- treemap ----------------------------------------------------------- */
+
+// Squarified: each strip takes rows while that keeps its tiles closer to square.
+function squarify(items, x, y, w, h) {
+  const out = [];
+  const worst = (row, side) => {
+    const sum = row.reduce((a, r) => a + r.area, 0);
+    const max = Math.max(...row.map((r) => r.area)), min = Math.min(...row.map((r) => r.area));
+    return Math.max((side * side * max) / (sum * sum), (sum * sum) / (side * side * min));
+  };
+  const lay = (row) => {
+    const sum = row.reduce((a, r) => a + r.area, 0);
+    if (w >= h) {
+      const cw = sum / h;
+      let cy = y;
+      for (const r of row) { out.push({ r, x, y: cy, w: cw, h: r.area / cw }); cy += r.area / cw; }
+      x += cw; w -= cw;
+    } else {
+      const rh = sum / w;
+      let cx = x;
+      for (const r of row) { out.push({ r, x: cx, y, w: r.area / rh, h: rh }); cx += r.area / rh; }
+      y += rh; h -= rh;
+    }
+  };
+  let row = [];
+  for (const item of items) {
+    const side = Math.min(w, h);
+    if (row.length && worst([...row, item], side) > worst(row, side)) { lay(row); row = []; }
+    row.push(item);
+  }
+  if (row.length) lay(row);
+  return out;
+}
+
+function drawTreemap() {
+  const svg = document.getElementById("treemap");
+  while (svg.childNodes.length > 1) svg.removeChild(svg.lastChild);
+  if (state.chart !== "treemap") return;
+  const NS = "http://www.w3.org/2000/svg";
+  const ramp = RAW[isDark() ? "dark" : "light"];
+  const W = svg.clientWidth || 560, H = svg.clientHeight || 340;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const { rows, total } = groupRows();
+  const live = rows.filter((r) => !r.excluded && r.value > 0);
+  const sum = live.reduce((a, r) => a + r.value, 0);
+  if (!sum) return;
+  const drillable = !!NEXT[state.level];
+  const tiles = squarify(live.map((r) => ({ ...r, area: (r.value / sum) * W * H })), 0, 0, W, H);
+
+  for (const t of tiles) {
+    const s = t.r;
+    const g = document.createElementNS(NS, "g");
+    g.setAttribute("class", "tile");
+    g.setAttribute("tabindex", "0");
+    g.dataset.leaf = String(!drillable || !s.drillValue);
+    g.setAttribute("aria-label", state.private ? `${s.name}, ${pct(s.share)}` : `${s.name}, ${money2.format(s.value)}, ${pct(s.share)}`);
+    const rect = document.createElementNS(NS, "rect");
+    rect.setAttribute("x", t.x + 1);
+    rect.setAttribute("y", t.y + 1);
+    rect.setAttribute("width", Math.max(0, t.w - 2));
+    rect.setAttribute("height", Math.max(0, t.h - 2));
+    rect.setAttribute("rx", Math.min(4, t.w / 4, t.h / 4));
+    rect.setAttribute("fill", SLOTS[s.slot]);
+    g.appendChild(rect);
+
+    if (t.w > 56 && t.h > 36) {
+      const ink = luminance(ramp[s.slot]) > 0.45 ? "#0b0b0b" : "#ffffff";
+      const room = Math.floor((t.w - 16) / 7);
+      const fit = (text) => (text.length > room ? text.slice(0, Math.max(1, room - 1)) + "…" : text);
+      const line = (text, dy, weight) => {
+        const e = document.createElementNS(NS, "text");
+        e.setAttribute("x", t.x + 8);
+        e.setAttribute("y", t.y + dy);
+        e.setAttribute("font-size", "12");
+        e.setAttribute("font-weight", weight);
+        e.setAttribute("fill", ink);
+        e.setAttribute("pointer-events", "none");
+        e.textContent = fit(text);
+        g.appendChild(e);
+      };
+      line(s.name, 20, "600");
+      const figure = (state.private ? [pct(s.share)] : [`${compact.format(s.value)} · ${pct(s.share)}`, compact.format(s.value)])
+        .find((f) => f.length <= room);
+      if (figure) line(figure, 36, "400");
+    }
+
+    const enter = (ev) => { focusTile(s, ramp); moveTip(ev); };
+    g.addEventListener("pointerenter", enter);
+    g.addEventListener("pointermove", moveTip);
+    g.addEventListener("pointerleave", blurTile);
+    g.addEventListener("focus", () => { focusTile(s, ramp); const r = g.getBoundingClientRect(); place(r.left + r.width / 2, r.top); });
+    g.addEventListener("blur", blurTile);
+    g.addEventListener("click", () => drill(s));
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); drill(s); } });
+    svg.appendChild(g);
+  }
+}
+
+function focusTile(s, ramp) {
+  for (const row of document.querySelectorAll(".legend-row")) row.classList.toggle("hot", row.dataset.name === s.name);
+  tip.querySelector(".v").textContent = state.private ? pct(s.share) : money2.format(s.value);
+  tip.querySelector(".key").style.background = ramp[s.slot];
+  tip.querySelector(".nm").textContent = s.name + (s.sub ? ` · ${s.sub}` : "");
+  tip.dataset.show = "true";
+}
+
+function blurTile() {
+  for (const row of document.querySelectorAll(".legend-row")) row.classList.remove("hot");
+  tip.dataset.show = "false";
 }
 
 /* ---- hover layer ------------------------------------------------------- */
@@ -1415,7 +1549,10 @@ function render() {
   const segs = segmentsFrom(rows, total);
   renderCrumbs();
   renderExclBar();
+  document.getElementById("donutBox").hidden = state.chart !== "donut";
+  document.getElementById("treemapBox").hidden = state.chart !== "treemap";
   drawDonut(segs, total);
+  drawTreemap();
   renderLegend(segs, ramp, rows.filter((r) => r.excluded));
   renderTable(rows, total, ramp);
   renderGrid();
@@ -1427,6 +1564,7 @@ function render() {
   for (const b of document.querySelectorAll("[data-mode]")) b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode));
   for (const b of document.querySelectorAll("[data-years]")) b.setAttribute("aria-pressed", String(Number(b.dataset.years) === state.years));
   for (const b of document.querySelectorAll("[data-scale]")) b.setAttribute("aria-pressed", String(b.dataset.scale === state.scale));
+  for (const b of document.querySelectorAll("[data-chart]")) b.setAttribute("aria-pressed", String(b.dataset.chart === state.chart));
   for (const b of document.querySelectorAll("[data-grid-rows]")) b.setAttribute("aria-pressed", String(b.dataset.gridRows === state.gridRows));
   for (const b of document.querySelectorAll("[data-level]")) b.setAttribute("aria-pressed", String(b.dataset.level === state.level));
   // Pressed means "amounts are hidden", which is also what swaps the eye for
@@ -1476,6 +1614,7 @@ function start() {
   setInterval(renderFreshness, 60000);
   loadExclusions();
   loadPrivate();
+  loadChart();
   readHash();
   addEventListener("popstate", () => { readHash(); render(); });
   document.getElementById("past").hidden = !CONFIG;
@@ -1531,7 +1670,10 @@ function bindControls() {
   for (const b of document.querySelectorAll("[data-grid-rows]")) {
     b.addEventListener("click", () => { state.gridRows = b.dataset.gridRows; render(); });
   }
-  addEventListener("resize", () => requestAnimationFrame(drawPast));
+  for (const b of document.querySelectorAll("[data-chart]")) {
+    b.addEventListener("click", () => { state.chart = b.dataset.chart; saveChart(); render(); });
+  }
+  addEventListener("resize", () => requestAnimationFrame(() => { drawTreemap(); drawPast(); }));
   for (const b of document.querySelectorAll("[data-theme-set]")) {
     b.addEventListener("click", () => {
       const v = b.dataset.themeSet;
