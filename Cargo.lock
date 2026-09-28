@@ -1367,10 +1367,12 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64",
  "chrono",
  "clap",
  "futures-util",
  "reqwest",
+ "ring",
  "serde",
  "serde_json",
  "thiserror",

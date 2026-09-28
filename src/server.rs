@@ -13,6 +13,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
 };
+use base64::Engine as _;
 use futures_util::{StreamExt, TryStreamExt, stream};
 use serde::{Deserialize, Serialize};
 
@@ -87,6 +88,8 @@ fn mtime(path: &std::path::Path) -> Option<SystemTime> {
 
 struct AppState {
     settings: Settings,
+    app_csp: String,
+    onboarding_csp: String,
     http: reqwest::Client,
     sure: Client,
     mapping: MappingStore,
@@ -95,7 +98,12 @@ struct AppState {
 type Shared = Arc<AppState>;
 
 pub fn router(settings: Settings, http: reqwest::Client) -> Result<Router> {
+    let sure_origin = reqwest::Url::parse(&settings.sure_url)?
+        .origin()
+        .ascii_serialization();
     let state = Arc::new(AppState {
+        app_csp: csp(APP_HTML, &sure_origin),
+        onboarding_csp: csp(ONBOARDING_HTML, &sure_origin),
         sure: Client::new(http.clone(), &settings.sure_url),
         mapping: MappingStore::new(settings.mapping.clone())?,
         settings,
@@ -117,14 +125,56 @@ async fn index(State(s): State<Shared>) -> Response {
     if s.settings.client_id.is_none() {
         return Redirect::temporary("/onboarding").into_response();
     }
-    no_store(Html(APP_HTML))
+    page(&s.app_csp, APP_HTML)
 }
 
 async fn onboarding(State(s): State<Shared>) -> Response {
     if s.settings.client_id.is_some() {
         return Redirect::temporary("/").into_response();
     }
-    no_store(Html(ONBOARDING_HTML))
+    page(&s.onboarding_csp, ONBOARDING_HTML)
+}
+
+/// Each page's one inline script and stylesheet are allowed by hash, so
+/// nothing injected alongside them can run.
+fn csp(html: &str, sure_origin: &str) -> String {
+    let hash = |tag: &str| {
+        let open = format!("<{tag}>");
+        let start = html.find(&open).expect("inline block") + open.len();
+        let end = start
+            + html[start..]
+                .find(&format!("</{tag}>"))
+                .expect("closed block");
+        let digest = ring::digest::digest(&ring::digest::SHA256, &html.as_bytes()[start..end]);
+        format!(
+            "'sha256-{}'",
+            base64::engine::general_purpose::STANDARD.encode(digest)
+        )
+    };
+    format!(
+        "default-src 'none'; script-src {}; style-src {}; img-src 'self' data:; \
+         connect-src 'self' {sure_origin}; base-uri 'none'; form-action 'none'; \
+         frame-ancestors 'none'",
+        hash("script"),
+        hash("style"),
+    )
+}
+
+fn page(csp: &str, html: &'static str) -> Response {
+    let mut res = no_store(Html(html));
+    let headers = res.headers_mut();
+    if let Ok(v) = header::HeaderValue::from_str(csp) {
+        headers.insert(header::CONTENT_SECURITY_POLICY, v);
+    }
+    headers.insert(
+        header::REFERRER_POLICY,
+        header::HeaderValue::from_static("no-referrer"),
+    );
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        header::HeaderValue::from_static("nosniff"),
+    );
+    res
 }
 
 fn no_store(body: impl IntoResponse) -> Response {
@@ -394,6 +444,25 @@ mod tests {
     fn dates_are_validated() {
         assert!(valid_date("2026-09-28"));
         assert!(!valid_date("2026-09-28&page=2"));
+    }
+
+    #[test]
+    fn csp_allows_only_the_pages_own_inline_blocks() {
+        let policy = csp(
+            "<style>a{}</style><script>go()</script>",
+            "https://sure.example.com",
+        );
+        assert!(policy.contains("script-src 'sha256-"));
+        assert!(!policy.contains("unsafe-inline"));
+        assert!(policy.contains("connect-src 'self' https://sure.example.com;"));
+        assert!(policy.contains("frame-ancestors 'none'"));
+        assert_ne!(
+            policy,
+            csp(
+                "<style>a{}</style><script>evil()</script>",
+                "https://sure.example.com"
+            )
+        );
     }
 
     #[test]
