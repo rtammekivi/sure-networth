@@ -230,8 +230,16 @@
   .past-card .col { outline: none; }
   .past-card .col-hit { fill: transparent; }
   .past-card .col:hover .col-hit, .past-card .col:focus-visible .col-hit { fill: var(--wash); }
-  .past-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--text-secondary); margin-top: 10px; }
-  .past-legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .past-legend { display: flex; flex-wrap: wrap; gap: 2px 6px; font-size: 12px; color: var(--text-secondary); margin-top: 10px; }
+  .past-legend button {
+    appearance: none; border: 0; background: transparent; font: inherit; color: inherit;
+    display: inline-flex; align-items: center; gap: 7px; padding: 3px 8px; border-radius: 6px; cursor: pointer;
+  }
+  .past-legend button:hover { background: var(--wash); color: var(--text-primary); }
+  .past-legend button[aria-disabled="true"] { cursor: default; }
+  .past-legend button[aria-disabled="true"]:hover { background: transparent; color: inherit; }
+  .past-legend .off { color: var(--text-muted); }
+  .past-legend .off .nm { text-decoration: line-through; }
   .past-msg { font-size: 13px; color: var(--text-secondary); margin: 8px 0 0; }
   .past-msg:empty { display: none; }
 
@@ -441,6 +449,7 @@
       <svg id="pastChart" role="img" aria-labelledby="pastTitle"><title id="pastTitle">Allocation over time</title></svg>
       <div class="past-legend" id="pastLegend"></div>
       <p class="past-msg" id="pastMsg" role="status"></p>
+      <p class="past-msg warn" id="pastWarn"></p>
     </div>
   </section>
 
@@ -1094,7 +1103,7 @@ async function loadPast() {
 // that has since been sold or closed lands in "Other".
 function pastSeries(segs) {
   const points = [...PAST.get(state.years), DATA];
-  const series = [...segs].sort((a, b) => a.slot - b.slot).map((s) => ({ name: s.name, slot: s.slot, values: [] }));
+  const series = [...segs].sort((a, b) => a.slot - b.slot).map((s) => ({ name: s.name, slot: s.slot, seg: s, values: [] }));
   let other = series.find((s) => s.slot === OTHER_SLOT && s.name === "Other");
   if (!other) series.push(other = { name: "Other", slot: OTHER_SLOT, values: [] });
   const byName = new Map(series.filter((s) => s !== other).map((s) => [s.name, s]));
@@ -1123,6 +1132,7 @@ function drawPast() {
   const legend = document.getElementById("pastLegend");
   while (svg.childNodes.length > 1) svg.removeChild(svg.lastChild);
   legend.textContent = "";
+  document.getElementById("pastWarn").textContent = "";
   pastTip.dataset.show = "false";
   document.getElementById("pastCaption").textContent = `Over time · by ${LEVEL_NAME[state.level].toLowerCase()}`
     + (state.path.length ? " · " + state.path.map((p) => p.label).join(" › ") : "");
@@ -1192,14 +1202,50 @@ function drawPast() {
   });
   svg.appendChild(el("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: "var(--baseline)", "stroke-width": 1 }));
 
-  for (const s of series) {
-    const item = document.createElement("span");
+  const item = (name, slot, off, onClick) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    if (off) b.className = "off";
     const sw = document.createElement("span");
     sw.className = "swatch";
-    sw.style.background = ramp[s.slot];
-    item.append(sw, document.createTextNode(s.name));
-    legend.appendChild(item);
+    sw.style.background = ramp[slot];
+    const nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = name;
+    b.append(sw, nm);
+    if (onClick) {
+      b.title = `${off ? "Include" : "Exclude"} ${name}`;
+      b.addEventListener("click", onClick);
+    } else {
+      b.setAttribute("aria-disabled", "true");
+    }
+    legend.appendChild(b);
+  };
+  for (const s of series) item(s.name, s.slot, false, s.seg && (() => setRowIncluded(s.seg, false)));
+  for (const r of rows.filter((r) => r.excluded)) item(r.name, r.slot, true, () => setRowIncluded(r, true));
+  renderPastWarn();
+}
+
+// Sure rebuilds history from recorded activity, so an account whose earlier
+// deposits or holdings were never imported goes negative there. The chart
+// draws that as nothing; this says so.
+function renderPastWarn() {
+  const neg = new Map();
+  for (const p of PAST.get(state.years) || []) {
+    const byAccount = new Map();
+    for (const l of p.leaves) byAccount.set(l.account, (byAccount.get(l.account) || 0) + l.value);
+    for (const [a, v] of byAccount) {
+      if (v > -0.5) continue;
+      const w = neg.get(a) || { from: p.as_of, to: p.as_of, min: 0 };
+      w.to = p.as_of;
+      w.min = Math.min(w.min, v);
+      neg.set(a, w);
+    }
   }
+  document.getElementById("pastWarn").textContent = neg.size
+    ? "Sure reports a negative balance for these asset accounts, drawn as zero: "
+      + [...neg].map(([a, w]) => `${a} (down to ${m(w.min)}, ${w.from === w.to ? w.from : `${w.from} to ${w.to}`})`).join("; ")
+    : "";
 }
 
 function showPastTip(label, entries, total, ramp) {
