@@ -264,6 +264,7 @@
     <span class="ctl-label" style="margin-left:8px">Granularity</span>
     <div class="seg" role="group" aria-label="Granularity">
       <button type="button" data-level="market">Market</button>
+      <button type="button" data-level="currency">Currency</button>
       <button type="button" data-level="class" aria-pressed="true">Class</button>
       <button type="button" data-level="account">Account</button>
       <button type="button" data-level="item">Holding</button>
@@ -354,14 +355,16 @@ const OTHER_SLOT = 6;
 const MAX_SEGMENTS = 7;
 const MIN_SHARE = 0.0075;
 
-// Market heads the chain rather than sitting beside it: it is the coarsest cut
-// of the same leaves, so drilling a market lands on the classes inside it. The
-// chain is walked by name, not by position, because picking "Class" at the root
-// skips market entirely and the path then starts one level in.
-const LEVELS = ["market", "class", "account", "item"];
-const depthOf = (level) => LEVELS.indexOf(level);
-const LEVEL_NAME = { market: "Market", class: "Asset class", account: "Account", item: "Holding" };
-const LEVEL_PLURAL = { market: "Markets", class: "Asset classes", account: "Accounts", item: "Holdings" };
+// Market and currency head the chain rather than sitting beside it: each is a
+// coarsest cut of the same leaves, so drilling one lands on the classes inside
+// it. The chain is walked by name, not by position, because picking "Class" at
+// the root skips them entirely and the path then starts one level in.
+const LEVELS = ["market", "currency", "class", "account", "item"];
+const DEPTH = { market: 0, currency: 0, class: 1, account: 2, item: 3 };
+const NEXT = { market: "class", currency: "class", class: "account", account: "item" };
+const depthOf = (level) => DEPTH[level];
+const LEVEL_NAME = { market: "Market", currency: "Currency", class: "Asset class", account: "Account", item: "Holding" };
+const LEVEL_PLURAL = { market: "Markets", currency: "Currencies", class: "Asset classes", account: "Accounts", item: "Holdings" };
 
 const STORE_KEY = "sure-networth:excluded";
 const PRIVATE_KEY = "sure-networth:private";
@@ -370,7 +373,7 @@ const state = { mode: "assets", level: "class", path: [], excluded: new Set(), p
 // Exclusions are stored as "<level>::<value>", not as row references, so one
 // taken at class level still bites after drilling to accounts or holdings, and
 // survives a basis toggle.
-function leafKeys(leaf) { return [`market::${leaf.market}`, `class::${leaf.class}`, `account::${leaf.account}`, `item::${leaf.label}`]; }
+function leafKeys(leaf) { return [`market::${leaf.market}`, `currency::${leaf.currency}`, `class::${leaf.class}`, `account::${leaf.account}`, `item::${leaf.label}`]; }
 function leafExcluded(leaf) { return leafKeys(leaf).some((k) => state.excluded.has(k)); }
 
 function loadExclusions() {
@@ -696,11 +699,10 @@ function blurSeg() {
 
 function drill(s) {
   if (!s.drillValue) return;
-  const idx = depthOf(state.level);
-  if (idx >= LEVELS.length - 1) return;
-  state.path = state.path.filter((p) => depthOf(p.level) < idx);
+  if (!NEXT[state.level]) return;
+  state.path = state.path.filter((p) => depthOf(p.level) < depthOf(state.level));
   state.path.push({ level: state.level, value: s.drillValue, label: s.name });
-  state.level = LEVELS[idx + 1];
+  state.level = NEXT[state.level];
   navigate();
 }
 
@@ -846,7 +848,7 @@ function renderCrumbs() {
     nav.appendChild(sep);
     nav.appendChild(mk(p.label, () => {
       state.path = state.path.slice(0, i + 1);
-      state.level = LEVELS[depthOf(p.level) + 1];
+      state.level = NEXT[p.level];
       navigate();
     }, i === state.path.length - 1));
   });
@@ -855,7 +857,7 @@ function renderCrumbs() {
 function renderLegend(segs, ramp, excluded = []) {
   const box = document.getElementById("legend");
   box.textContent = "";
-  const drillable = depthOf(state.level) < LEVELS.length - 1;
+  const drillable = !!NEXT[state.level];
   for (const s of segs) {
     const row = document.createElement("div");
     row.className = "legend-row";

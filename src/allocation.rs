@@ -68,6 +68,7 @@ struct Held {
     ticker: String,
     name: String,
     market: &'static str,
+    currency: String,
     value: f64,
 }
 
@@ -101,6 +102,7 @@ pub fn build(snap: &Snapshot, rates: &Rates, map: &Mapping, generated_at: String
                 sec.and_then(|s| s.exchange_operating_mic.as_deref()),
                 Some(&h.currency),
             ),
+            currency: h.currency.clone(),
             value,
         });
     }
@@ -161,12 +163,10 @@ pub fn build(snap: &Snapshot, rates: &Rates, map: &Mapping, generated_at: String
             });
         }
         for h in held {
-            leaves.push(leaf(
-                Some(h.ticker.clone()),
-                h.name.clone(),
-                h.value,
-                h.market,
-            ));
+            leaves.push(Leaf {
+                currency: h.currency.clone(),
+                ..leaf(Some(h.ticker.clone()), h.name.clone(), h.value, h.market)
+            });
         }
         if held.is_empty() && balance - split > 0.005 {
             leaves.push(leaf(None, a.name.clone(), balance - split, account_market));
@@ -316,6 +316,22 @@ mod tests {
         let a = build_book();
         assert_eq!(leaf(&a, "Broker", "Apple").market, "United States");
         assert_eq!(leaf(&a, "Flat", "Flat").market, "Europe");
+    }
+
+    #[test]
+    fn holdings_carry_their_own_currency() {
+        let snap = snapshot(
+            vec![account("Broker", "asset", "EUR", 1000000, 0)],
+            vec![
+                holding("Broker", "AAPL", Some("Apple"), "$6,000.00", "USD"),
+                holding("Broker", "VWCE", Some("World"), "€4,000.00", "EUR"),
+            ],
+            ("10000.00", "0.00"),
+        );
+        let rates = fx::resolve(&snap, &BTreeMap::new(), &BTreeMap::new());
+        let a = build(&snap, &rates, &mapping(), "t".into());
+        assert_eq!(leaf(&a, "Broker", "Apple").currency, "USD");
+        assert_eq!(leaf(&a, "Broker", "World").currency, "EUR");
     }
 
     #[test]

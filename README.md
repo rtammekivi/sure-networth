@@ -1,6 +1,6 @@
 # sure-networth
 
-A net-worth allocation donut for [Sure](https://github.com/we-promise/sure), which has none: market → asset class → account → holding, with click-to-drill, a gross-assets / net-worth toggle, exclusions and a private mode that hides amounts but keeps percentages.
+A net-worth allocation donut for [Sure](https://github.com/we-promise/sure), which has none: market or currency → asset class → account → holding, with click-to-drill, a gross-assets / net-worth toggle, exclusions and a private mode that hides amounts but keeps percentages.
 
 ![Demo: hovering, drilling from class to holdings, the market cut, the net-worth basis, excluding property and private mode](docs/demo.gif)
 
@@ -67,6 +67,8 @@ Sure has no asset class on accounts or securities, so unmapped accounts fall bac
 The file is **re-read whenever it changes**; no restart. A file that fails to parse is logged and the previous mapping kept. In Kubernetes the chart renders it into a ConfigMap mounted as a directory, so `helm upgrade` with new mapping values reaches the running pod on the kubelet's next sync.
 
 **Market** (Europe / United States / Global) needs no mapping: it comes from each security's country, then its MIC, then the account currency; `CRYPTO:*` is Global.
+
+**Currency** is what each holding is priced in, or the account's currency for cash and whole accounts.
 
 ## Run
 
