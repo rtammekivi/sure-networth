@@ -701,7 +701,7 @@ function drill(s) {
   state.path = state.path.filter((p) => depthOf(p.level) < idx);
   state.path.push({ level: state.level, value: s.drillValue, label: s.name });
   state.level = LEVELS[idx + 1];
-  render();
+  navigate();
 }
 
 // Picking a coarser granularity keeps the filters that sit above it — "Class"
@@ -709,6 +709,13 @@ function drill(s) {
 function setLevel(level) {
   state.path = state.path.filter((p) => depthOf(p.level) < depthOf(level));
   state.level = level;
+  navigate();
+}
+
+function navigate() {
+  const nav = { level: state.level, path: state.path };
+  const cur = history.state;
+  if (!cur || JSON.stringify(cur) !== JSON.stringify(nav)) history.pushState(nav, "");
   render();
 }
 
@@ -824,7 +831,7 @@ function renderCrumbs() {
     nav.appendChild(mk(p.label, () => {
       state.path = state.path.slice(0, i + 1);
       state.level = LEVELS[depthOf(p.level) + 1];
-      render();
+      navigate();
     }, i === state.path.length - 1));
   });
 }
@@ -1069,6 +1076,13 @@ function start() {
   setInterval(renderFreshness, 60000);
   loadExclusions();
   loadPrivate();
+  history.replaceState({ level: state.level, path: state.path }, "");
+  addEventListener("popstate", (e) => {
+    if (!e.state) return;
+    state.level = e.state.level;
+    state.path = e.state.path;
+    render();
+  });
   render();
 }
 
