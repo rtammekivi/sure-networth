@@ -2,6 +2,7 @@ use crate::sure::{Account, BalanceSheet, Holding, HoldingSecurity, Money, Named,
 
 pub fn account(name: &str, class: &str, currency: &str, balance: i64, cash: i64) -> Account {
     Account {
+        id: name.into(),
         name: name.into(),
         balance_cents: balance,
         cash_balance_cents: cash,

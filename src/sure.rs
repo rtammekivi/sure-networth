@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, anyhow};
+use futures_util::future::try_join_all;
 use serde::{Deserialize, de::DeserializeOwned};
 
 #[derive(Debug, Clone)]
@@ -17,6 +18,7 @@ pub enum SureError {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Account {
+    pub id: String,
     pub name: String,
     pub balance_cents: i64,
     pub cash_balance_cents: i64,
@@ -227,9 +229,11 @@ impl Client {
     }
 
     /// `/accounts` only knows today's balances, so a past date takes each
-    /// account's from `/balances` instead. An account with no balance that day
-    /// did not exist yet and is left out. The balance sheet totals still
-    /// describe today and are the caller's to replace.
+    /// account's from `/balances` instead. Sure only keeps rows for the span it
+    /// last materialised, so an account without one that day carries its latest
+    /// earlier row forward; with none at all it did not exist yet and is left
+    /// out. The balance sheet totals still describe today and are the caller's
+    /// to replace.
     pub async fn snapshot_on(
         &self,
         auth: &Auth,
@@ -238,10 +242,16 @@ impl Client {
     ) -> Result<Snapshot, SureError> {
         let balances_path = format!("/balances?start_date={date}&end_date={date}");
         let holdings_path = format!("/holdings?date={date}");
-        let (balances, holdings) = tokio::try_join!(
+        let (mut balances, holdings) = tokio::try_join!(
             self.all::<Balance>(auth, &balances_path),
             self.all::<Holding>(auth, &holdings_path),
         )?;
+        let missing = current
+            .accounts
+            .iter()
+            .filter(|a| !balances.iter().any(|b| belongs(b, a)));
+        let earlier = try_join_all(missing.map(|a| self.latest_balance(auth, a, date))).await?;
+        balances.extend(earlier.into_iter().flatten());
         Ok(Snapshot {
             as_of: date.to_owned(),
             accounts: on_date(&current.accounts, &balances),
@@ -250,6 +260,24 @@ impl Client {
             balance_sheet: current.balance_sheet.clone(),
         })
     }
+
+    async fn latest_balance(
+        &self,
+        auth: &Auth,
+        account: &Account,
+        date: &str,
+    ) -> Result<Option<Balance>, SureError> {
+        let path = format!(
+            "/balances?account_id={}&currency={}&end_date={date}&per_page=1",
+            account.id, account.currency
+        );
+        let page: Page<Balance> = self.get(auth, &path).await?;
+        Ok(page.items.into_iter().next())
+    }
+}
+
+fn belongs(balance: &Balance, account: &Account) -> bool {
+    balance.account.name == account.name && balance.currency == account.currency
 }
 
 fn active(accounts: Vec<Account>) -> Vec<Account> {
@@ -263,9 +291,7 @@ fn on_date(accounts: &[Account], balances: &[Balance]) -> Vec<Account> {
     accounts
         .iter()
         .filter_map(|a| {
-            let b = balances
-                .iter()
-                .find(|b| b.account.name == a.name && b.currency == a.currency)?;
+            let b = balances.iter().find(|b| belongs(b, a))?;
             Some(Account {
                 balance_cents: b.balance_cents,
                 cash_balance_cents: b.cash_balance_cents,
