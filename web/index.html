@@ -235,7 +235,9 @@
 
   .past-card { padding: 16px 16px 12px; }
   .past-card svg { width: 100%; height: 240px; display: block; overflow: visible; transition: opacity .12s ease; }
-  .past-card.loading svg { opacity: .45; }
+  .past-card .ghost { fill: var(--gridline); animation: ghost 1.4s ease-in-out infinite; }
+  @keyframes ghost { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .past-card .ghost { animation: none; } }
   .past-card .col { outline: none; }
   .past-card .col-hit { fill: transparent; }
   .past-card .col:hover .col-hit, .past-card .col:focus-visible .col-hit { fill: var(--wash); }
@@ -1107,12 +1109,9 @@ const PAST_LOADING = new Set();
 
 async function loadPast() {
   const years = state.years;
-  if (PAST.has(years)) return drawPast();
-  if (PAST_LOADING.has(years)) return;
+  if (PAST.has(years) || PAST_LOADING.has(years)) return;
   PAST_LOADING.add(years);
-  const card = document.getElementById("pastCard");
   const msg = document.getElementById("pastMsg");
-  card.classList.add("loading");
   msg.textContent = "Loading history from Sure…";
   try {
     const tok = sessionStorage.getItem(TOKEN_KEY);
@@ -1126,7 +1125,6 @@ async function loadPast() {
   }
   PAST_LOADING.delete(years);
   if (years !== state.years) return;
-  card.classList.remove("loading");
   drawPast();
 }
 
@@ -1169,7 +1167,7 @@ function drawPast() {
   pastTip.dataset.show = "false";
   document.getElementById("pastCaption").textContent = `Over time · by ${LEVEL_NAME[state.level].toLowerCase()}`
     + (state.path.length ? " · " + state.path.map((p) => p.label).join(" › ") : "");
-  if (!PAST.has(state.years)) return;
+  if (!PAST.has(state.years)) return drawGhost(svg);
 
   const NS = "http://www.w3.org/2000/svg";
   const el = (tag, attrs) => {
@@ -1284,6 +1282,30 @@ function renderPastWarn() {
     ? "Left out up to the last date Sure's history for them goes negative: "
       + [...bad].map(([a, w]) => `${a} (through ${w.until}, down to ${m(w.min)})`).join("; ")
     : "";
+}
+
+function drawGhost(svg) {
+  if (!PAST_LOADING.has(state.years)) return;
+  const NS = "http://www.w3.org/2000/svg";
+  const W = svg.clientWidth || 800, H = 240, L = 60, R = 4, T = 8, B = 24;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const n = pastDates(state.years).length + 1;
+  const band = (W - L - R) / n, bw = Math.min(36, band * 0.62), base = H - B;
+  for (let i = 0; i < n; i++) {
+    const h = (H - T - B) * (0.42 + 0.3 * (i / n) + 0.06 * Math.sin(i * 1.9));
+    const r = document.createElementNS(NS, "rect");
+    r.setAttribute("class", "ghost");
+    r.setAttribute("x", L + band * i + (band - bw) / 2);
+    r.setAttribute("y", base - h);
+    r.setAttribute("width", bw);
+    r.setAttribute("height", h);
+    r.setAttribute("rx", 4);
+    r.style.animationDelay = `${i * 70}ms`;
+    svg.appendChild(r);
+  }
+  const line = document.createElementNS(NS, "line");
+  for (const [k, v] of Object.entries({ x1: L, x2: W - R, y1: base, y2: base, stroke: "var(--baseline)", "stroke-width": 1 })) line.setAttribute(k, v);
+  svg.appendChild(line);
 }
 
 function showPastTip(label, entries, total, ramp) {
@@ -1684,8 +1706,8 @@ function render() {
   renderHero();
   renderCenter();
   renderFooter();
-  drawPast();
   if (state.tab === "time") loadPast();
+  drawPast();
 
   for (const b of document.querySelectorAll("[data-mode]")) b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode));
   for (const b of document.querySelectorAll("[data-years]")) b.setAttribute("aria-pressed", String(Number(b.dataset.years) === state.years));
