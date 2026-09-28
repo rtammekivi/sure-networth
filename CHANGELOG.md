@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/rtammekivi/sure-networth/compare/v0.3.0...v0.4.0) (2026-09-28)
+
+
+### Features
+
+* **server:** strict content security policy on the pages ([385d040](https://github.com/rtammekivi/sure-networth/commit/385d04057222cb6ae007d859e5dc8798091c9a55))
+* **web:** page skeleton while the first snapshot loads ([de381b0](https://github.com/rtammekivi/sure-networth/commit/de381b04fdfc155f193bcfe13e5e782af3e2aa55))
+
 ## [0.3.0](https://github.com/rtammekivi/sure-networth/compare/v0.2.0...v0.3.0) (2026-09-28)
 
 
