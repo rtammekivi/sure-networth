@@ -1,6 +1,6 @@
 # sure-networth
 
-A net-worth allocation donut for [Sure](https://github.com/we-promise/sure), which has none: market or currency → asset class → account → holding, with click-to-drill, a gross-assets / net-worth toggle, exclusions and a private mode that hides amounts but keeps percentages.
+A net-worth allocation donut for [Sure](https://github.com/we-promise/sure), which has none: market or currency → asset class → account → holding, with click-to-drill, a gross-assets / net-worth toggle, exclusions, a private mode that hides amounts but keeps percentages, and the same cut over the last 1, 3 or 5 years.
 
 ![Demo: hovering, drilling from class to holdings, the market cut, the net-worth basis, excluding property and private mode](docs/demo.gif)
 
@@ -69,6 +69,8 @@ The file is **re-read whenever it changes**; no restart. A file that fails to pa
 **Market** (Europe / United States / Global) needs no mapping: it comes from each security's country, then its MIC, then the account currency; `CRYPTO:*` is Global.
 
 **Currency** is what each holding is priced in, or the account's currency for cash and whole accounts.
+
+**Over time** rebuilds the allocation at each past month-end (quarter-end for 3 and 5 years) from Sure's daily `/balances` and `/holdings`, converted at that day's ECB rates. It follows the current cut, basis and exclusions, and is not available in a `render`ed static page.
 
 ## Run
 

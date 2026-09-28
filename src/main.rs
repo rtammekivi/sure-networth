@@ -149,7 +149,7 @@ async fn main() -> Result<()> {
                 .map_err(|e| anyhow!(e))?;
             let given: BTreeMap<_, _> = given.into_iter().collect();
             let foreign = fx::foreign_currencies(&snap, &given);
-            let ecb = fx::ecb(&http, &snap.balance_sheet.currency, &foreign).await;
+            let ecb = fx::ecb(&http, "latest", &snap.balance_sheet.currency, &foreign).await;
             let rates = fx::resolve(&snap, &given, &ecb);
             let mapping = mapping::Mapping::load(mapping.as_deref())?;
             let data = allocation::build(&snap, &rates, &mapping, now());

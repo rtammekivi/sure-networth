@@ -28,6 +28,14 @@ pub struct Account {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct Balance {
+    pub currency: String,
+    pub balance_cents: i64,
+    pub cash_balance_cents: i64,
+    pub account: Named,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Named {
     pub name: String,
 }
@@ -86,7 +94,12 @@ struct Pagination {
 
 #[derive(Debug, Deserialize)]
 struct Page<T> {
-    #[serde(alias = "accounts", alias = "holdings", alias = "securities")]
+    #[serde(
+        alias = "accounts",
+        alias = "balances",
+        alias = "holdings",
+        alias = "securities"
+    )]
     items: Vec<T>,
     pagination: Option<Pagination>,
 }
@@ -97,6 +110,14 @@ pub struct Snapshot {
     pub as_of: String,
     pub accounts: Vec<Account>,
     pub holdings: Vec<Holding>,
+    pub securities: Vec<Security>,
+    pub balance_sheet: BalanceSheet,
+}
+
+/// The part of a snapshot that only exists as of today.
+#[derive(Debug, Clone)]
+pub struct Current {
+    pub accounts: Vec<Account>,
     pub securities: Vec<Security>,
     pub balance_sheet: BalanceSheet,
 }
@@ -185,13 +206,105 @@ impl Client {
         let holdings = self.all(auth, &format!("/holdings?date={as_of}")).await?;
         Ok(Snapshot {
             as_of,
-            accounts: accounts
-                .into_iter()
-                .filter(|a| a.status != "archived")
-                .collect(),
+            accounts: active(accounts),
             holdings,
             securities,
             balance_sheet,
         })
+    }
+
+    pub async fn current(&self, auth: &Auth) -> Result<Current, SureError> {
+        let (accounts, securities, balance_sheet) = tokio::try_join!(
+            self.all::<Account>(auth, "/accounts"),
+            self.all::<Security>(auth, "/securities"),
+            self.get::<BalanceSheet>(auth, "/balance_sheet"),
+        )?;
+        Ok(Current {
+            accounts: active(accounts),
+            securities,
+            balance_sheet,
+        })
+    }
+
+    /// `/accounts` only knows today's balances, so a past date takes each
+    /// account's from `/balances` instead. An account with no balance that day
+    /// did not exist yet and is left out. The balance sheet totals still
+    /// describe today and are the caller's to replace.
+    pub async fn snapshot_on(
+        &self,
+        auth: &Auth,
+        current: &Current,
+        date: &str,
+    ) -> Result<Snapshot, SureError> {
+        let balances_path = format!("/balances?start_date={date}&end_date={date}");
+        let holdings_path = format!("/holdings?date={date}");
+        let (balances, holdings) = tokio::try_join!(
+            self.all::<Balance>(auth, &balances_path),
+            self.all::<Holding>(auth, &holdings_path),
+        )?;
+        Ok(Snapshot {
+            as_of: date.to_owned(),
+            accounts: on_date(&current.accounts, &balances),
+            holdings,
+            securities: current.securities.clone(),
+            balance_sheet: current.balance_sheet.clone(),
+        })
+    }
+}
+
+fn active(accounts: Vec<Account>) -> Vec<Account> {
+    accounts
+        .into_iter()
+        .filter(|a| a.status != "archived")
+        .collect()
+}
+
+fn on_date(accounts: &[Account], balances: &[Balance]) -> Vec<Account> {
+    accounts
+        .iter()
+        .filter_map(|a| {
+            let b = balances
+                .iter()
+                .find(|b| b.account.name == a.name && b.currency == a.currency)?;
+            Some(Account {
+                balance_cents: b.balance_cents,
+                cash_balance_cents: b.cash_balance_cents,
+                ..a.clone()
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testdata::account;
+
+    fn balance(account: &str, currency: &str, cents: i64) -> Balance {
+        Balance {
+            currency: currency.into(),
+            balance_cents: cents,
+            cash_balance_cents: cents / 2,
+            account: Named {
+                name: account.into(),
+            },
+        }
+    }
+
+    #[test]
+    fn past_balances_replace_todays_and_drop_accounts_not_yet_open() {
+        let accounts = vec![
+            account("Broker", "asset", "USD", 900, 900),
+            account("Flat", "asset", "EUR", 700, 0),
+        ];
+        let past = on_date(
+            &accounts,
+            &[balance("Broker", "EUR", 1), balance("Broker", "USD", 400)],
+        );
+        assert_eq!(past.len(), 1);
+        assert_eq!(
+            (past[0].balance_cents, past[0].cash_balance_cents),
+            (400, 200)
+        );
     }
 }

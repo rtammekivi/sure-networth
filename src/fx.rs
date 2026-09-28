@@ -48,6 +48,7 @@ pub fn foreign_currencies(snap: &Snapshot, given: &BTreeMap<String, f64>) -> Vec
     snap.accounts
         .iter()
         .map(|a| &a.currency)
+        .chain(snap.holdings.iter().map(|h| &h.currency))
         .filter(|c| *c != base && !given.contains_key(*c))
         .cloned()
         .collect::<BTreeSet<_>>()
@@ -121,6 +122,16 @@ pub fn resolve(
     out
 }
 
+/// A past date has no balance sheet of its own to solve against.
+pub fn from_ecb(base: &str, ecb: &BTreeMap<String, f64>) -> Rates {
+    let mut out = Rates::default();
+    out.rates.insert(base.to_owned(), 1.0);
+    for (c, r) in ecb {
+        out.set(c, *r, Source::Ecb);
+    }
+    out
+}
+
 #[derive(Deserialize)]
 struct Frankfurter {
     rates: BTreeMap<String, f64>,
@@ -130,6 +141,7 @@ struct Frankfurter {
 /// outage leaves the solve unchecked rather than failing the page.
 pub async fn ecb(
     http: &reqwest::Client,
+    date: &str,
     base: &str,
     currencies: &[String],
 ) -> BTreeMap<String, f64> {
@@ -137,7 +149,7 @@ pub async fn ecb(
         return BTreeMap::new();
     }
     let url = format!(
-        "https://api.frankfurter.dev/v1/latest?base={base}&symbols={}",
+        "https://api.frankfurter.dev/v1/{date}?base={base}&symbols={}",
         currencies.join(",")
     );
     let fetched = async {

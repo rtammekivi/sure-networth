@@ -13,12 +13,13 @@ use axum::{
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
 };
+use futures_util::{StreamExt, TryStreamExt, stream};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     allocation, fx,
     mapping::Mapping,
-    sure::{Auth, Client, SureError},
+    sure::{Auth, Client, Current, Money, SureError},
 };
 
 pub const APP_HTML: &str = include_str!("../web/index.html");
@@ -105,6 +106,7 @@ pub fn router(settings: Settings, http: reqwest::Client) -> Result<Router> {
         .route("/onboarding", get(onboarding))
         .route("/config.json", get(config))
         .route("/api/allocation", get(allocation))
+        .route("/api/history", get(history))
         .route("/api/onboarding/register", post(register))
         .route("/api/onboarding/verify", post(verify))
         .route("/healthz", get(|| async { "ok" }))
@@ -153,16 +155,33 @@ fn valid_date(d: &str) -> bool {
     chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").is_ok()
 }
 
+fn bearer(headers: &HeaderMap) -> Option<Auth> {
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(|t| Auth::Bearer(t.to_owned()))
+}
+
+fn respond<T: Serialize>(what: &str, result: Result<T, SureError>) -> Response {
+    match result {
+        Ok(a) => no_store(Json(a)),
+        Err(SureError::Unauthorized) => {
+            (StatusCode::UNAUTHORIZED, "Sure rejected the token").into_response()
+        }
+        Err(SureError::Other(e)) => {
+            tracing::error!("{what} failed: {e:#}");
+            (StatusCode::BAD_GATEWAY, format!("{e:#}")).into_response()
+        }
+    }
+}
+
 async fn allocation(
     State(s): State<Shared>,
     headers: HeaderMap,
     Query(q): Query<AllocationQuery>,
 ) -> Response {
-    let Some(token) = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-    else {
+    let Some(auth) = bearer(&headers) else {
         return (StatusCode::UNAUTHORIZED, "missing bearer token").into_response();
     };
     let date = match q.date {
@@ -170,17 +189,90 @@ async fn allocation(
         Some(_) => return (StatusCode::BAD_REQUEST, "date must be YYYY-MM-DD").into_response(),
         None => chrono::Local::now().date_naive().to_string(),
     };
-    let auth = Auth::Bearer(token.to_owned());
-    match compute(&s, &auth, &date).await {
-        Ok(a) => no_store(Json(a)),
-        Err(SureError::Unauthorized) => {
-            (StatusCode::UNAUTHORIZED, "Sure rejected the token").into_response()
+    respond("allocation", compute(&s, &auth, &date).await)
+}
+
+const MAX_HISTORY_DATES: usize = 60;
+const HISTORY_CONCURRENCY: usize = 4;
+
+#[derive(Deserialize)]
+struct HistoryQuery {
+    dates: String,
+}
+
+fn history_dates(raw: &str) -> Option<Vec<String>> {
+    let dates: Vec<String> = raw.split(',').map(str::to_owned).collect();
+    (dates.len() <= MAX_HISTORY_DATES && dates.iter().all(|d| valid_date(d))).then_some(dates)
+}
+
+async fn history(
+    State(s): State<Shared>,
+    headers: HeaderMap,
+    Query(q): Query<HistoryQuery>,
+) -> Response {
+    let Some(auth) = bearer(&headers) else {
+        return (StatusCode::UNAUTHORIZED, "missing bearer token").into_response();
+    };
+    let Some(dates) = history_dates(&q.dates) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            format!("dates must be up to {MAX_HISTORY_DATES} comma-separated YYYY-MM-DD"),
+        )
+            .into_response();
+    };
+    respond("history", compute_history(&s, &auth, &dates).await)
+}
+
+async fn compute_history(
+    s: &AppState,
+    auth: &Auth,
+    dates: &[String],
+) -> Result<Vec<allocation::Allocation>, SureError> {
+    let current = s.sure.current(auth).await?;
+    let map = s.mapping.get();
+    let generated_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    stream::iter(dates.iter().cloned())
+        .map(|date| history_point(s, auth, &current, &map, &generated_at, date))
+        .buffered(HISTORY_CONCURRENCY)
+        .try_collect()
+        .await
+}
+
+async fn history_point(
+    s: &AppState,
+    auth: &Auth,
+    current: &Current,
+    map: &Mapping,
+    generated_at: &str,
+    date: String,
+) -> Result<allocation::Allocation, SureError> {
+    let mut snap = s.sure.snapshot_on(auth, current, &date).await?;
+    let base = snap.balance_sheet.currency.clone();
+    let foreign = fx::foreign_currencies(&snap, &BTreeMap::new());
+    let rates = fx::from_ecb(&base, &fx::ecb(&s.http, &date, &base, &foreign).await);
+    let total = |class: &str| {
+        let sum: f64 = snap
+            .accounts
+            .iter()
+            .filter(|a| a.classification == class)
+            .map(|a| a.balance_cents as f64 / 100.0 * rates.get(&a.currency).unwrap_or(1.0))
+            .sum();
+        Money {
+            amount: format!("{sum:.2}"),
         }
-        Err(SureError::Other(e)) => {
-            tracing::error!("allocation failed: {e:#}");
-            (StatusCode::BAD_GATEWAY, format!("{e:#}")).into_response()
-        }
-    }
+    };
+    let (assets, liabilities) = (total("asset"), total("liability"));
+    snap.balance_sheet.net_worth = Money {
+        amount: format!("{:.2}", assets.value() - liabilities.value()),
+    };
+    snap.balance_sheet.assets = assets;
+    snap.balance_sheet.liabilities = liabilities;
+    Ok(allocation::build(
+        &snap,
+        &rates,
+        map,
+        generated_at.to_owned(),
+    ))
 }
 
 async fn compute(
@@ -191,7 +283,7 @@ async fn compute(
     let snap = s.sure.snapshot(auth, date, false).await?;
     let given = BTreeMap::new();
     let foreign = fx::foreign_currencies(&snap, &given);
-    let ecb = fx::ecb(&s.http, &snap.balance_sheet.currency, &foreign).await;
+    let ecb = fx::ecb(&s.http, "latest", &snap.balance_sheet.currency, &foreign).await;
     let rates = fx::resolve(&snap, &given, &ecb);
     Ok(allocation::build(
         &snap,
@@ -302,5 +394,15 @@ mod tests {
     fn dates_are_validated() {
         assert!(valid_date("2026-09-28"));
         assert!(!valid_date("2026-09-28&page=2"));
+    }
+
+    #[test]
+    fn history_dates_are_bounded_and_validated() {
+        assert_eq!(
+            history_dates("2026-07-31,2026-08-31").unwrap(),
+            ["2026-07-31", "2026-08-31"]
+        );
+        assert!(history_dates("2026-07-31,").is_none());
+        assert!(history_dates(&vec!["2026-01-01"; MAX_HISTORY_DATES + 1].join(",")).is_none());
     }
 }
