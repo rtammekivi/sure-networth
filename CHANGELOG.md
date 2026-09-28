@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.1](https://github.com/rtammekivi/sure-networth/compare/v0.4.0...v0.4.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **web:** over-time tooltip shows only the hovered series ([973ff2c](https://github.com/rtammekivi/sure-networth/commit/973ff2c1209f83fee41f6451edab3f32a76d85af))
+
+
+### Documentation
+
+* shorter readme ([89a630c](https://github.com/rtammekivi/sure-networth/commit/89a630c13dc10858503e9854f9000503801438b7))
+
 ## [0.4.0](https://github.com/rtammekivi/sure-networth/compare/v0.3.0...v0.4.0) (2026-09-28)
 
 
