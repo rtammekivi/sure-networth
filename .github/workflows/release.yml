@@ -56,6 +56,55 @@ jobs:
           echo "build=true" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+  binaries:
+    name: ${{ matrix.target }}
+    needs: setup
+    if: needs.setup.outputs.build == 'true'
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+          - target: aarch64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.tag }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: install cross
+        run: cargo install cross --locked --version 0.2.5
+
+      - name: build
+        run: cross build --release --locked --target ${{ matrix.target }}
+
+      - name: package
+        env:
+          VERSION: ${{ needs.setup.outputs.tag }}
+        run: |
+          name="sure-networth-${VERSION}-${{ matrix.target }}"
+          mkdir -p "dist/${name}"
+          cp "target/${{ matrix.target }}/release/sure-networth" "dist/${name}/"
+          cp README.md "dist/${name}/"
+          tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+          (cd dist && sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256")
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+
   # Each arch builds on its own native runner — no QEMU, so the arm64 build
   # is as fast as the amd64 one. Each pushes a digest only; the merge job
   # below assembles them into one multi-arch tag.
@@ -183,9 +232,15 @@ jobs:
           if-no-files-found: error
 
   assets:
-    needs: [setup, merge, chart]
+    needs: [setup, binaries, merge, chart]
     runs-on: ubuntu-26.04
     steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: "*-unknown-linux-musl"
+          merge-multiple: true
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -196,7 +251,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.setup.outputs.tag }}
-        run: gh release upload "$TAG" dist/*.tgz --clobber
+        run: gh release upload "$TAG" dist/*.tar.gz dist/*.sha256 dist/*.tgz --clobber
 
       - name: append install notes
         env:
@@ -208,11 +263,7 @@ jobs:
           BASE: ${{ github.server_url }}/${{ github.repository }}/releases/download
         run: |
           version="${TAG#v}"
-          gh release view "$TAG" --json body -q .body > notes.md
-          if grep -qF '<!-- install -->' notes.md; then
-            echo "install section already present"
-            exit 0
-          fi
+          gh release view "$TAG" --json body -q .body | sed '/<!-- install -->/,$d' > notes.md
           cat >> notes.md <<EOF
 
           <!-- install -->
@@ -229,5 +280,7 @@ jobs:
           | --- | --- |
           | container | \`${IMAGE}:${version}\` |
           | chart | \`oci://${CHART}\` · [sure-networth-chart-${version}.tgz](${BASE}/${TAG}/sure-networth-chart-${version}.tgz) |
+          | x86_64 | [tar.gz](${BASE}/${TAG}/sure-networth-${TAG}-x86_64-unknown-linux-musl.tar.gz) · [sha256](${BASE}/${TAG}/sure-networth-${TAG}-x86_64-unknown-linux-musl.tar.gz.sha256) |
+          | aarch64 | [tar.gz](${BASE}/${TAG}/sure-networth-${TAG}-aarch64-unknown-linux-musl.tar.gz) · [sha256](${BASE}/${TAG}/sure-networth-${TAG}-aarch64-unknown-linux-musl.tar.gz.sha256) |
           EOF
           gh release edit "$TAG" --notes-file notes.md
