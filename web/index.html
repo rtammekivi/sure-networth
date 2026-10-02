@@ -186,6 +186,8 @@
     font: inherit; text-align: left; cursor: pointer; color: inherit;
   }
   .legend-main[data-leaf="true"] { cursor: default; }
+  .legend-sub .legend-main { padding-top: 4px; padding-bottom: 4px; padding-left: 30px; font-size: 13px; }
+  .legend-sub .swatch { visibility: hidden; }
   .swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
   .legend-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .legend-val { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
@@ -529,8 +531,9 @@ const RAW = {
   dark:  ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9"]
 };
 const OTHER_SLOT = 6;
-const MAX_SEGMENTS = 7;
+const MAX_SEGMENTS = 12;
 const MIN_SHARE = 0.0075;
+const OTHER_DETAIL = 0.1;
 
 // Market and currency head the chain rather than sitting beside it: each is a
 // coarsest cut of the same leaves, so drilling one lands on the classes inside
@@ -548,7 +551,7 @@ const PRIVATE_KEY = "sure-networth:private";
 const CHART_KEY = "sure-networth:chart";
 const THEME_KEY = "sure-networth:theme";
 const THEMES = ["auto", "light", "dark"];
-const state = { mode: "assets", level: "class", path: [], excluded: new Set(), private: false, years: 1, scale: "amount", gridRows: "market", chart: "donut", tab: "allocation" };
+const state = { mode: "assets", level: "class", path: [], excluded: new Set(), private: false, years: 1, scale: "amount", gridRows: "market", chart: "donut", tab: "allocation", otherOpen: null };
 
 // Exclusions are stored as "<level>::<value>", not as row references, so one
 // taken at class level still bites after drilling to accounts or holdings, and
@@ -738,7 +741,8 @@ function groupRows() {
   const all = [...acc.values()];
   for (const r of all) {
     const i = order.indexOf(r.name);
-    r.slot = i >= 0 && i < MAX_SEGMENTS ? i : OTHER_SLOT;
+    r.slot = i < 0 || i >= MAX_SEGMENTS ? OTHER_SLOT : i <= OTHER_SLOT ? i : (i - OTHER_SLOT - 1) % OTHER_SLOT;
+    r.order = i < 0 ? Infinity : i;
     r.share = total ? r.value / total : 0;
   }
   all.sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
@@ -758,7 +762,7 @@ function segmentsFrom(rows, total) {
   const rest = fold.reduce((a, r) => a + r.value, 0);
   return [...keep.map((r) => ({ ...r })), {
     name: "Other", value: rest, share: total ? rest / total : 0,
-    slot: OTHER_SLOT, folded: fold.length, drillValue: null, sub: null, foldedRows: fold
+    slot: OTHER_SLOT, order: Infinity, folded: fold.length, drillValue: null, sub: null, foldedRows: fold
   }];
 }
 
@@ -1172,7 +1176,7 @@ async function loadPast() {
 // that has since been sold or closed lands in "Other".
 function pastSeries(segs) {
   const points = [...PAST.get(state.years), DATA];
-  const series = [...segs].sort((a, b) => a.slot - b.slot).map((s) => ({ name: s.name, slot: s.slot, seg: s, values: [] }));
+  const series = [...segs].sort((a, b) => a.order - b.order).map((s) => ({ name: s.name, slot: s.slot, seg: s, values: [] }));
   let other = series.find((s) => s.slot === OTHER_SLOT && s.name === "Other");
   if (!other) series.push(other = { name: "Other", slot: OTHER_SLOT, values: [] });
   const byName = new Map(series.filter((s) => s !== other).map((s) => [s.name, s]));
@@ -1552,14 +1556,16 @@ function renderLegend(segs, ramp, excluded = []) {
   const box = document.getElementById("legend");
   box.textContent = "";
   const drillable = !!NEXT[state.level];
-  for (const s of segs) {
+  const other = segs.find((s) => s.foldedRows);
+  const open = state.otherOpen ?? (!!other && other.share > OTHER_DETAIL);
+  const add = (s, hot, sub) => {
     const row = document.createElement("div");
-    row.className = "legend-row";
-    row.dataset.name = s.name;
+    row.className = sub ? "legend-row legend-sub" : "legend-row";
+    row.dataset.name = hot.name;
 
     const main = document.createElement("button");
     main.type = "button";
-    const leaf = !s.drillValue || !drillable;
+    const leaf = !s.foldedRows && (!s.drillValue || !drillable);
     main.dataset.leaf = String(leaf);
     main.className = "legend-main";
     if (leaf) main.setAttribute("aria-disabled", "true");
@@ -1569,7 +1575,7 @@ function renderLegend(segs, ramp, excluded = []) {
     sw.style.background = ramp[s.slot];
     const nm = document.createElement("span");
     nm.className = "legend-name";
-    nm.textContent = s.name + (s.folded ? ` (${s.folded})` : "");
+    nm.textContent = s.name + (s.folded ? ` (${s.folded}) ${open ? "▾" : "▸"}` : "");
     const val = document.createElement("span");
     val.className = "legend-val";
     amount(val, m(s.value));
@@ -1577,6 +1583,7 @@ function renderLegend(segs, ramp, excluded = []) {
     pc.className = "legend-pct";
     pc.textContent = pct(s.share);
     main.append(sw, nm, val, pc);
+    if (s.foldedRows) main.setAttribute("aria-expanded", String(open));
 
     const x = document.createElement("button");
     x.type = "button";
@@ -1587,10 +1594,15 @@ function renderLegend(segs, ramp, excluded = []) {
     x.addEventListener("click", () => setRowIncluded(s, false));
 
     row.append(main, x);
-    row.addEventListener("pointerenter", () => focusSeg(s, ramp, s._g));
+    row.addEventListener("pointerenter", () => focusSeg(hot, ramp, hot._g));
     row.addEventListener("pointerleave", blurSeg);
-    if (!leaf) main.addEventListener("click", () => drill(s));
+    if (s.foldedRows) main.addEventListener("click", () => { state.otherOpen = !open; render(); });
+    else if (!leaf) main.addEventListener("click", () => drill(s));
     box.appendChild(row);
+  };
+  for (const s of segs) {
+    add(s, s);
+    if (s.foldedRows && open) for (const r of s.foldedRows) add(r, s, true);
   }
 
   // Excluded rows stay listed, dimmed, so the legend can undo what it did.
