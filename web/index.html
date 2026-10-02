@@ -960,7 +960,7 @@ function drawTreemap() {
 
 function focusTile(s, ramp) {
   for (const row of document.querySelectorAll(".legend-row")) row.classList.toggle("hot", row.dataset.name === s.name);
-  tip.querySelector(".v").textContent = state.private ? pct(s.share) : money2.format(s.value);
+  tip.querySelector(".v").textContent = state.private ? pct(s.share) : `${money2.format(s.value)} · ${pct(s.share)}`;
   tip.querySelector(".key").style.background = ramp[s.slot];
   tip.querySelector(".nm").textContent = s.name + (s.sub ? ` · ${s.sub}` : "");
   tip.dataset.show = "true";
@@ -987,7 +987,7 @@ function focusSeg(s, ramp, node) {
 
   // The tooltip exists to answer "how much is this", so a row of bullets would
   // make it pointless — in private mode it answers with the share instead.
-  tip.querySelector(".v").textContent = state.private ? pct(s.share) : money2.format(s.value);
+  tip.querySelector(".v").textContent = state.private ? pct(s.share) : `${money2.format(s.value)} · ${pct(s.share)}`;
   tip.querySelector(".key").style.background = ramp[s.slot];
   tip.querySelector(".nm").textContent = s.name + (s.folded ? ` (${s.folded} rows)` : "");
   tip.dataset.show = "true";
