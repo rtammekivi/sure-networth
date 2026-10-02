@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/rtammekivi/sure-networth/compare/v0.5.1...v0.6.0) (2026-10-02)
+
+
+### Features
+
+* **web:** show the share next to the amount in chart tooltips ([b1e709f](https://github.com/rtammekivi/sure-networth/commit/b1e709f9423f67df954cd1e0cd89f129f1dad478))
+
 ## [0.5.1](https://github.com/rtammekivi/sure-networth/compare/v0.5.0...v0.5.1) (2026-10-02)
 
 
