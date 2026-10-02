@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/rtammekivi/sure-networth/compare/v0.4.2...v0.5.0) (2026-10-02)
+
+
+### Features
+
+* **web:** show up to 12 donut segments and an expandable Other list ([6fe2ec8](https://github.com/rtammekivi/sure-networth/commit/6fe2ec83b8636c08fd61678041a87502a1e0c5e3))
+
+
+### Documentation
+
+* re-record the demo ([1fa1a1a](https://github.com/rtammekivi/sure-networth/commit/1fa1a1a86da68760f716a78cf639d9d075bc0621))
+
 ## [0.4.2](https://github.com/rtammekivi/sure-networth/compare/v0.4.1...v0.4.2) (2026-09-28)
 
 
