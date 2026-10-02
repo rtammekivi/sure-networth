@@ -451,10 +451,10 @@
   <div class="card">
     <div class="panel">
       <div class="treemap" id="treemapBox" hidden>
-        <svg id="treemap" role="img" aria-labelledby="treemapTitle"><title id="treemapTitle">Allocation treemap</title></svg>
+        <svg id="treemap" role="img" aria-label="Allocation treemap"></svg>
       </div>
       <div class="chart" id="donutBox">
-        <svg id="donut" viewBox="0 0 200 200" role="img" aria-labelledby="donutTitle"><title id="donutTitle">Allocation donut</title></svg>
+        <svg id="donut" viewBox="0 0 200 200" role="img" aria-label="Allocation donut"></svg>
         <div class="center">
           <div class="k" id="centerKey"></div>
           <div class="val" id="centerVal"></div>
@@ -501,7 +501,7 @@
   <section class="past">
     <h2 id="pastCaption">Over time</h2>
     <div class="card past-card" id="pastCard">
-      <svg id="pastChart" role="img" aria-labelledby="pastTitle"><title id="pastTitle">Allocation over time</title></svg>
+      <svg id="pastChart" role="img" aria-label="Allocation over time"></svg>
       <div class="past-legend" id="pastLegend"></div>
       <p class="past-msg" id="pastMsg" role="status"></p>
       <p class="past-msg warn" id="pastWarn"></p>
@@ -797,7 +797,7 @@ function isDark() {
 
 function drawDonut(segs, total) {
   const svg = document.getElementById("donut");
-  while (svg.childNodes.length > 1) svg.removeChild(svg.lastChild);
+  svg.textContent = "";
   const NS = "http://www.w3.org/2000/svg";
   const ramp = RAW[isDark() ? "dark" : "light"];
 
@@ -896,7 +896,7 @@ function squarify(items, x, y, w, h) {
 
 function drawTreemap() {
   const svg = document.getElementById("treemap");
-  while (svg.childNodes.length > 1) svg.removeChild(svg.lastChild);
+  svg.textContent = "";
   if (state.chart !== "treemap") return;
   const NS = "http://www.w3.org/2000/svg";
   const ramp = RAW[isDark() ? "dark" : "light"];
@@ -1205,7 +1205,7 @@ const monthLabel = (d) => new Date(d).toLocaleDateString("en-US", { month: "shor
 function drawPast() {
   const svg = document.getElementById("pastChart");
   const legend = document.getElementById("pastLegend");
-  while (svg.childNodes.length > 1) svg.removeChild(svg.lastChild);
+  svg.textContent = "";
   legend.textContent = "";
   document.getElementById("pastWarn").textContent = "";
   pastTip.dataset.show = "false";
