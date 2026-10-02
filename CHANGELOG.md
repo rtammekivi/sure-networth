@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/rtammekivi/sure-networth/compare/v0.5.0...v0.5.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **web:** stop chart titles showing as hover tooltips ([cb3ef3e](https://github.com/rtammekivi/sure-networth/commit/cb3ef3e3549fd49d51a0cb9905ee3f9c311d4b68))
+
 ## [0.5.0](https://github.com/rtammekivi/sure-networth/compare/v0.4.2...v0.5.0) (2026-10-02)
 
 
