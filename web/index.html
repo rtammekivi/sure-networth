@@ -423,9 +423,18 @@
     </div>
     <div class="ctl-group" data-for="time">
       <div class="seg" role="group" aria-label="Range">
-        <button type="button" data-years="1" aria-pressed="true">1Y</button>
-        <button type="button" data-years="3">3Y</button>
-        <button type="button" data-years="5">5Y</button>
+        <button type="button" data-period="1D">1D</button>
+        <button type="button" data-period="WTD">WTD</button>
+        <button type="button" data-period="7D">7D</button>
+        <button type="button" data-period="MTD">MTD</button>
+        <button type="button" data-period="LM">LM</button>
+        <button type="button" data-period="30D">30D</button>
+        <button type="button" data-period="90D">90D</button>
+        <button type="button" data-period="YTD">YTD</button>
+        <button type="button" data-period="1Y" aria-pressed="true">1Y</button>
+        <button type="button" data-period="3Y">3Y</button>
+        <button type="button" data-period="5Y">5Y</button>
+        <button type="button" data-period="10Y">10Y</button>
       </div>
       <div class="seg" role="group" aria-label="Scale">
         <button type="button" data-scale="amount" aria-pressed="true">Amount</button>
@@ -551,7 +560,7 @@ const PRIVATE_KEY = "sure-networth:private";
 const CHART_KEY = "sure-networth:chart";
 const THEME_KEY = "sure-networth:theme";
 const THEMES = ["auto", "light", "dark"];
-const state = { mode: "assets", level: "class", path: [], excluded: new Set(), private: false, years: 1, scale: "amount", gridRows: "market", chart: "donut", tab: "allocation", otherOpen: null };
+const state = { mode: "assets", level: "class", path: [], excluded: new Set(), private: false, period: "1Y", scale: "amount", gridRows: "market", chart: "donut", tab: "allocation", otherOpen: null };
 
 // Exclusions are stored as "<level>::<value>", not as row references, so one
 // taken at class level still bites after drilling to accounts or holdings, and
@@ -1139,43 +1148,68 @@ const PAST = new Map();
 const pastTip = document.getElementById("pastTip");
 let compact;
 
-function pastDates(years) {
-  const step = years === 1 ? 1 : 3;
-  const now = new Date();
+const iso = (d) => d.toLocaleDateString("sv-SE");
+const day = (t, k) => new Date(t.getFullYear(), t.getMonth(), t.getDate() + k);
+
+function days(from, to) {
   const out = [];
-  for (let k = (years * 12) / step - 1; k >= 0; k--) {
-    out.push(new Date(now.getFullYear(), now.getMonth() - k * step, 0).toLocaleDateString("sv-SE"));
-  }
+  for (const d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) out.push(iso(d));
   return out;
 }
+
+function monthEnds(t, n, step) {
+  const out = [];
+  for (let k = n - 1; k >= 0; k--) out.push(iso(new Date(t.getFullYear(), t.getMonth() - k * step, 0)));
+  return out;
+}
+
+const PERIODS = {
+  "1D": { daily: true, dates: (t) => days(day(t, -1), day(t, -1)) },
+  WTD: { daily: true, dates: (t) => days(day(t, -((t.getDay() + 6) % 7)), day(t, -1)) },
+  "7D": { daily: true, dates: (t) => days(day(t, -7), day(t, -1)) },
+  MTD: { daily: true, dates: (t) => days(day(t, 1 - t.getDate()), day(t, -1)) },
+  LM: { daily: true, ended: true, dates: (t) => days(new Date(t.getFullYear(), t.getMonth() - 1, 1), day(t, -t.getDate())) },
+  "30D": { daily: true, dates: (t) => days(day(t, -30), day(t, -1)) },
+  "90D": { daily: true, dates: (t) => Array.from({ length: 13 }, (_, i) => iso(day(t, -7 * (13 - i)))) },
+  YTD: { dates: (t) => monthEnds(t, t.getMonth() + 1, 1) },
+  "1Y": { dates: (t) => monthEnds(t, 12, 1) },
+  "3Y": { dates: (t) => monthEnds(t, 12, 3) },
+  "5Y": { dates: (t) => monthEnds(t, 20, 3) },
+  "10Y": { dates: (t) => monthEnds(t, 20, 6) },
+};
 
 const PAST_LOADING = new Set();
 
 async function loadPast() {
-  const years = state.years;
-  if (PAST.has(years) || PAST_LOADING.has(years)) return;
-  PAST_LOADING.add(years);
+  const period = state.period;
+  if (PAST.has(period) || PAST_LOADING.has(period)) return;
+  const dates = PERIODS[period].dates(new Date());
+  if (!dates.length) {
+    PAST.set(period, []);
+    return drawPast();
+  }
+  PAST_LOADING.add(period);
   const msg = document.getElementById("pastMsg");
   msg.textContent = "Loading history from Sure…";
   try {
     const tok = sessionStorage.getItem(TOKEN_KEY);
-    const res = await fetch(`api/history?dates=${pastDates(years).join(",")}`, { headers: { Authorization: `Bearer ${tok}` } });
+    const res = await fetch(`api/history?dates=${dates.join(",")}`, { headers: { Authorization: `Bearer ${tok}` } });
     if (res.status === 401) return signIn();
     if (!res.ok) throw new Error(`Loading history failed: ${await res.text()}`);
-    PAST.set(years, await res.json());
-    if (years === state.years) msg.textContent = "";
+    PAST.set(period, await res.json());
+    if (period === state.period) msg.textContent = "";
   } catch (e) {
-    if (years === state.years) msg.textContent = e.message || String(e);
+    if (period === state.period) msg.textContent = e.message || String(e);
   }
-  PAST_LOADING.delete(years);
-  if (years !== state.years) return;
+  PAST_LOADING.delete(period);
+  if (period !== state.period) return;
   drawPast();
 }
 
 // Series are the donut's segments, so colours match the ring above; anything
 // that has since been sold or closed lands in "Other".
 function pastSeries(segs) {
-  const points = [...PAST.get(state.years), DATA];
+  const points = PERIODS[state.period].ended ? PAST.get(state.period) : [...PAST.get(state.period), DATA];
   const series = [...segs].sort((a, b) => a.order - b.order).map((s) => ({ name: s.name, slot: s.slot, seg: s, values: [] }));
   let other = series.find((s) => s.slot === OTHER_SLOT && s.name === "Other");
   if (!other) series.push(other = { name: "Other", slot: OTHER_SLOT, values: [] });
@@ -1200,7 +1234,7 @@ function niceTop(v) {
   return step * 4;
 }
 
-const monthLabel = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+const dateLabel = (d) => new Date(`${d}T00:00`).toLocaleDateString("en-US", PERIODS[state.period].daily ? { month: "short", day: "numeric" } : { month: "short", year: "2-digit" });
 
 function drawPast() {
   const svg = document.getElementById("pastChart");
@@ -1211,7 +1245,7 @@ function drawPast() {
   pastTip.dataset.show = "false";
   document.getElementById("pastCaption").textContent = `Over time · by ${LEVEL_NAME[state.level].toLowerCase()}`
     + (state.path.length ? " · " + state.path.map((p) => p.label).join(" › ") : "");
-  if (!PAST.has(state.years)) return drawGhost(svg);
+  if (!PAST.has(state.period)) return drawGhost(svg);
 
   const NS = "http://www.w3.org/2000/svg";
   const el = (tag, attrs) => {
@@ -1248,7 +1282,7 @@ function drawPast() {
     const hit = el("rect", { class: "col-hit", x, y: T, width: band, height: H - T - B, rx: 6 });
     g.appendChild(hit);
     const stack = series.filter((s) => s.values[i] > 0);
-    const label = i === dates.length - 1 ? "Now" : monthLabel(d);
+    const label = i === dates.length - 1 && !PERIODS[state.period].ended ? "Now" : dateLabel(d);
     let acc = 0;
     stack.forEach((s, j) => {
       const v = share ? s.values[i] / totals[i] : s.values[i];
@@ -1310,7 +1344,7 @@ function drawPast() {
 // the account negative. Up to its last negative date the account is left out.
 function untrustedAccounts() {
   const bad = new Map();
-  for (const p of PAST.get(state.years) || []) {
+  for (const p of PAST.get(state.period) || []) {
     const byAccount = new Map();
     for (const l of p.leaves) byAccount.set(l.account, (byAccount.get(l.account) || 0) + l.value);
     for (const [a, v] of byAccount) {
@@ -1333,11 +1367,11 @@ function renderPastWarn() {
 }
 
 function drawGhost(svg) {
-  if (!PAST_LOADING.has(state.years)) return;
+  if (!PAST_LOADING.has(state.period)) return;
   const NS = "http://www.w3.org/2000/svg";
   const W = svg.clientWidth || 800, H = 240, L = 60, R = 4, T = 8, B = 24;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  const n = pastDates(state.years).length + 1;
+  const n = PERIODS[state.period].dates(new Date()).length + !PERIODS[state.period].ended;
   const band = (W - L - R) / n, bw = Math.min(36, band * 0.62), base = H - B;
   for (let i = 0; i < n; i++) {
     const h = (H - T - B) * (0.42 + 0.3 * (i / n) + 0.06 * Math.sin(i * 1.9));
@@ -1763,7 +1797,7 @@ function render() {
   drawPast();
 
   for (const b of document.querySelectorAll("[data-mode]")) b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode));
-  for (const b of document.querySelectorAll("[data-years]")) b.setAttribute("aria-pressed", String(Number(b.dataset.years) === state.years));
+  for (const b of document.querySelectorAll("[data-period]")) b.setAttribute("aria-pressed", String(b.dataset.period === state.period));
   for (const b of document.querySelectorAll("[data-scale]")) b.setAttribute("aria-pressed", String(b.dataset.scale === state.scale));
   for (const b of document.querySelectorAll("[data-chart]")) b.setAttribute("aria-pressed", String(b.dataset.chart === state.chart));
   const grouped = state.tab === "grid" ? state.gridRows : state.level;
@@ -1869,8 +1903,8 @@ function bindControls() {
       else render();
     });
   }
-  for (const b of document.querySelectorAll("[data-years]")) {
-    b.addEventListener("click", () => { state.years = Number(b.dataset.years); render(); });
+  for (const b of document.querySelectorAll("[data-period]")) {
+    b.addEventListener("click", () => { state.period = b.dataset.period; render(); });
   }
   for (const b of document.querySelectorAll("[data-scale]")) {
     b.addEventListener("click", () => { state.scale = b.dataset.scale; render(); });
