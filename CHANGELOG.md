@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/rtammekivi/sure-networth/compare/v0.6.0...v0.7.0) (2026-10-16)
+
+
+### Features
+
+* **web:** add Sure's ranges to the over-time chart ([d4c86ef](https://github.com/rtammekivi/sure-networth/commit/d4c86ef188ac2a49d806e6888146a18a45b508a7))
+
 ## [0.6.0](https://github.com/rtammekivi/sure-networth/compare/v0.5.1...v0.6.0) (2026-10-02)
 
 
