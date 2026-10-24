@@ -37,6 +37,7 @@ jobs:
     runs-on: ubuntu-26.04
     outputs:
       build: ${{ steps.target.outputs.build }}
+      edge: ${{ steps.target.outputs.edge }}
       tag: ${{ steps.target.outputs.tag }}
     steps:
       - id: target
@@ -50,7 +51,8 @@ jobs:
           elif [ "$RELEASE_CREATED" = "true" ]; then
             tag="$RELEASE_TAG"
           else
-            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "edge=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "build=true" >> "$GITHUB_OUTPUT"
@@ -59,7 +61,7 @@ jobs:
   binaries:
     name: ${{ matrix.target }}
     needs: setup
-    if: ${{ !cancelled() && !failure() && needs.setup.outputs.build == 'true' }}
+    if: ${{ !cancelled() && !failure() && needs.setup.outputs.build == 'true' && needs.setup.outputs.edge != 'true' }}
     runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
@@ -188,9 +190,11 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=semver,pattern={{version}},value=${{ needs.setup.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.setup.outputs.tag }}
-            type=raw,value=latest
+            type=semver,pattern={{version}},value=${{ needs.setup.outputs.tag }},enable=${{ needs.setup.outputs.edge != 'true' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.setup.outputs.tag }},enable=${{ needs.setup.outputs.edge != 'true' }}
+            type=raw,value=latest,enable=${{ needs.setup.outputs.edge != 'true' }}
+            type=raw,value=edge,enable=${{ needs.setup.outputs.edge == 'true' }}
+            type=sha,enable=${{ needs.setup.outputs.edge == 'true' }}
 
       - name: create manifest list
         working-directory: /tmp/digests
@@ -206,7 +210,7 @@ jobs:
 
   chart:
     needs: [setup, merge]
-    if: ${{ !cancelled() && !failure() && needs.setup.outputs.build == 'true' }}
+    if: ${{ !cancelled() && !failure() && needs.setup.outputs.build == 'true' && needs.setup.outputs.edge != 'true' }}
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
@@ -234,7 +238,7 @@ jobs:
 
   assets:
     needs: [setup, binaries, merge, chart]
-    if: ${{ !cancelled() && !failure() && needs.setup.outputs.build == 'true' }}
+    if: ${{ !cancelled() && !failure() && needs.setup.outputs.build == 'true' && needs.setup.outputs.edge != 'true' }}
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/download-artifact@v8
