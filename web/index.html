@@ -166,6 +166,7 @@
   .treemap svg { width: 100%; height: 100%; display: block; }
   .treemap .tile { cursor: pointer; outline: none; }
   .treemap .tile[data-leaf="true"] { cursor: default; }
+  .treemap text { transition: opacity .15s ease; }
   .treemap .tile:hover rect, .treemap .tile:focus-visible rect { stroke: var(--text-primary); stroke-width: 1.5; }
 
   .center {
@@ -210,7 +211,13 @@
     margin-bottom: 12px; padding: 8px 12px; border-radius: 8px;
     background: var(--wash); font-size: 13px; color: var(--text-secondary);
   }
-  .excl-bar[hidden] { display: none; }
+  .excl {
+    display: grid; grid-template-rows: 1fr;
+    transition: grid-template-rows .38s cubic-bezier(.33, 1, .68, 1), opacity .38s ease, visibility .38s;
+  }
+  .excl[hidden] { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; }
+  .excl > div { overflow: hidden; min-height: 0; }
+  @media (prefers-reduced-motion: reduce) { .excl { transition: none; } }
   .excl-bar button {
     appearance: none; border: 1px solid var(--border); background: var(--surface-1);
     border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 12px;
@@ -451,10 +458,12 @@
 
   <nav class="crumbs" id="crumbs" aria-label="Drill-down"></nav>
 
-  <div class="excl-bar" id="exclBar" hidden>
-    <span id="exclText"></span>
-    <button type="button" id="exclReset">Show all</button>
-  </div>
+  <div class="excl" id="exclBar" hidden><div>
+    <div class="excl-bar">
+      <span id="exclText"></span>
+      <button type="button" id="exclReset">Show all</button>
+    </div>
+  </div></div>
 
   <div class="tab-panel" id="tab-allocation" role="tabpanel">
   <div class="card">
@@ -775,6 +784,41 @@ function segmentsFrom(rows, total) {
   }];
 }
 
+/* ---- motion ------------------------------------------------------------ */
+
+const calm = matchMedia("(prefers-reduced-motion: reduce)");
+const frames = {};
+const lerp = (a, b, t) => a + (b - a) * t;
+
+function halt(name) { cancelAnimationFrame(frames[name]); }
+
+function tween(name, moving, step) {
+  halt(name);
+  if (!moving || calm.matches) return step(1);
+  const t0 = performance.now();
+  const tick = (now) => {
+    const t = Math.min(1, (now - t0) / 380);
+    step(1 - Math.pow(1 - t, 3));
+    if (t < 1) frames[name] = requestAnimationFrame(tick);
+  };
+  tick(t0);
+}
+
+function viewKey() {
+  return [state.level, ...state.path.map((p) => `${p.level}=${p.value}`)].join("|");
+}
+
+function mergeOrder(prev, next) {
+  const out = [...next];
+  const at = (name) => out.findIndex((o) => o.name === name);
+  prev.forEach((p, i) => {
+    if (at(p.name) >= 0) return;
+    const before = prev.slice(0, i).reverse().find((q) => at(q.name) >= 0);
+    out.splice(before ? at(before.name) + 1 : 0, 0, p);
+  });
+  return out;
+}
+
 /* ---- donut ------------------------------------------------------------- */
 
 const CX = 100, CY = 100, R_OUT = 88, R_IN = 58, R_MID = (R_OUT + R_IN) / 2;
@@ -804,15 +848,32 @@ function isDark() {
   return matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-function drawDonut(segs, total) {
+let donutShown = { key: null, segs: [] };
+
+function drawDonut(segs) {
+  const key = viewKey();
+  const prev = donutShown.key === key ? donutShown.segs : [];
+  const from = new Map(prev.map((s) => [s.name, s.share]));
+  const lanes = mergeOrder(prev, segs).map((s) => {
+    const gone = !segs.includes(s);
+    return { s, gone, from: donutShown.key === key ? from.get(s.name) || 0 : s.share, to: gone ? 0 : s.share };
+  });
+  tween("donut", lanes.some((l) => Math.abs(l.from - l.to) > 1e-6), (t) => {
+    const now = lanes.map((l) => ({ ...l, share: lerp(l.from, l.to, t) }));
+    donutShown = { key, segs: now.filter((l) => l.share > 0).map((l) => ({ name: l.s.name, slot: l.s.slot, share: l.share })) };
+    paintDonut(now);
+  });
+}
+
+function paintDonut(lanes) {
   const svg = document.getElementById("donut");
   svg.textContent = "";
   const NS = "http://www.w3.org/2000/svg";
   const ramp = RAW[isDark() ? "dark" : "light"];
 
   let a = -Math.PI / 2;
-  segs.forEach((s) => {
-    const span = total ? (s.value / total) * TAU : 0;
+  lanes.forEach(({ s, gone, share }) => {
+    const span = share * TAU;
     if (span <= 0) return;
     const pad = Math.min(GAP, span * 0.4);
     const a0 = a + pad / 2, a1 = a + span - pad / 2;
@@ -820,13 +881,15 @@ function drawDonut(segs, total) {
 
     const g = document.createElementNS(NS, "g");
     g.setAttribute("class", "seg");
-    g.setAttribute("tabindex", "0");
-    g.setAttribute("role", "button");
-    // Private mode has to cover the screen reader too, or the amount is still
-    // being read out loud next to a hidden number.
-    g.setAttribute("aria-label", state.private
-      ? `${s.name}, ${pct(s.share)}`
-      : `${s.name}, ${money2.format(s.value)}, ${pct(s.share)}`);
+    if (!gone) {
+      g.setAttribute("tabindex", "0");
+      g.setAttribute("role", "button");
+      // Private mode has to cover the screen reader too, or the amount is still
+      // being read out loud next to a hidden number.
+      g.setAttribute("aria-label", state.private
+        ? `${s.name}, ${pct(s.share)}`
+        : `${s.name}, ${money2.format(s.value)}, ${pct(s.share)}`);
+    }
 
     const hit = document.createElementNS(NS, "path");
     hit.setAttribute("d", arcPath(a0 - pad / 2, a1 + pad / 2, R_OUT + 8, R_IN - 8));
@@ -842,7 +905,7 @@ function drawDonut(segs, total) {
     g.appendChild(p);
 
     const mid = (a0 + a1) / 2;
-    if ((a1 - a0) * R_MID > 24 && s.share >= 0.06) {
+    if ((a1 - a0) * R_MID > 24 && share >= 0.06) {
       const t = document.createElementNS(NS, "text");
       t.setAttribute("x", (CX + R_MID * Math.cos(mid)).toFixed(2));
       t.setAttribute("y", (CY + R_MID * Math.sin(mid)).toFixed(2));
@@ -852,10 +915,12 @@ function drawDonut(segs, total) {
       t.setAttribute("font-weight", "600");
       t.setAttribute("fill", luminance(ramp[s.slot]) > 0.45 ? "#0b0b0b" : "#ffffff");
       t.setAttribute("pointer-events", "none");
-      t.textContent = Math.round(s.share * 100) + "%";
+      t.textContent = Math.round(share * 100) + "%";
       g.appendChild(t);
     }
 
+    svg.appendChild(g);
+    if (gone) return;
     const enter = (ev) => { focusSeg(s, ramp); moveTip(ev); };
     g.addEventListener("pointerenter", enter);
     g.addEventListener("pointermove", moveTip);
@@ -864,7 +929,6 @@ function drawDonut(segs, total) {
     g.addEventListener("blur", blurSeg);
     g.addEventListener("click", () => drill(s));
     g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); drill(s); } });
-    svg.appendChild(g);
     s._g = g;
   });
 }
@@ -903,9 +967,22 @@ function squarify(items, x, y, w, h) {
   return out;
 }
 
+let tilesShown = { key: null, boxes: new Map() };
+
+function setBox(rect, b) {
+  rect.setAttribute("x", b.x + 1);
+  rect.setAttribute("y", b.y + 1);
+  rect.setAttribute("width", Math.max(0, b.w - 2));
+  rect.setAttribute("height", Math.max(0, b.h - 2));
+  rect.setAttribute("rx", Math.max(0, Math.min(4, b.w / 4, b.h / 4)));
+}
+
 function drawTreemap() {
+  halt("treemap");
   const svg = document.getElementById("treemap");
   svg.textContent = "";
+  const prev = tilesShown;
+  tilesShown = { key: null, boxes: new Map() };
   if (state.chart !== "treemap") return;
   const NS = "http://www.w3.org/2000/svg";
   const ramp = RAW[isDark() ? "dark" : "light"];
@@ -917,6 +994,21 @@ function drawTreemap() {
   if (!sum) return;
   const drillable = !!NEXT[state.level];
   const tiles = squarify(live.map((r) => ({ ...r, area: (r.value / sum) * W * H })), 0, 0, W, H);
+  const key = viewKey();
+  const same = prev.key === key;
+  const point = (b) => ({ x: b.x + b.w / 2, y: b.y + b.h / 2, w: 0, h: 0 });
+  const moves = [], labels = [];
+
+  if (same) {
+    for (const [name, b] of prev.boxes) {
+      if (tiles.some((t) => t.r.name === name)) continue;
+      const rect = document.createElementNS(NS, "rect");
+      rect.setAttribute("fill", SLOTS[b.slot]);
+      rect.setAttribute("pointer-events", "none");
+      svg.appendChild(rect);
+      moves.push({ rect, from: b, to: point(b), gone: true });
+    }
+  }
 
   for (const t of tiles) {
     const s = t.r;
@@ -926,13 +1018,10 @@ function drawTreemap() {
     g.dataset.leaf = String(!drillable || !s.drillValue);
     g.setAttribute("aria-label", state.private ? `${s.name}, ${pct(s.share)}` : `${s.name}, ${money2.format(s.value)}, ${pct(s.share)}`);
     const rect = document.createElementNS(NS, "rect");
-    rect.setAttribute("x", t.x + 1);
-    rect.setAttribute("y", t.y + 1);
-    rect.setAttribute("width", Math.max(0, t.w - 2));
-    rect.setAttribute("height", Math.max(0, t.h - 2));
-    rect.setAttribute("rx", Math.min(4, t.w / 4, t.h / 4));
     rect.setAttribute("fill", SLOTS[s.slot]);
     g.appendChild(rect);
+    const to = { x: t.x, y: t.y, w: t.w, h: t.h };
+    moves.push({ rect, name: s.name, slot: s.slot, from: same ? prev.boxes.get(s.name) || point(to) : to, to });
 
     if (t.w > 56 && t.h > 36) {
       const ink = luminance(ramp[s.slot]) > 0.45 ? "#0b0b0b" : "#ffffff";
@@ -948,6 +1037,7 @@ function drawTreemap() {
         e.setAttribute("pointer-events", "none");
         e.textContent = fit(text);
         g.appendChild(e);
+        labels.push(e);
       };
       line(s.name, 20, "600");
       const figure = (state.private ? [pct(s.share)] : [`${compact.format(s.value)} · ${pct(s.share)}`, compact.format(s.value)])
@@ -965,6 +1055,21 @@ function drawTreemap() {
     g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); drill(s); } });
     svg.appendChild(g);
   }
+
+  const moving = moves.some((m) => ["x", "y", "w", "h"].some((k) => Math.abs(m.from[k] - m.to[k]) > 0.5));
+  if (moving) for (const e of labels) e.style.opacity = "0";
+  tween("treemap", moving, (t) => {
+    const boxes = new Map();
+    for (const m of moves) {
+      const b = { x: lerp(m.from.x, m.to.x, t), y: lerp(m.from.y, m.to.y, t), w: lerp(m.from.w, m.to.w, t), h: lerp(m.from.h, m.to.h, t) };
+      setBox(m.rect, b);
+      if (!m.gone) boxes.set(m.name, { ...b, slot: m.slot });
+    }
+    tilesShown = { key, boxes };
+    if (t < 1) return;
+    for (const m of moves) if (m.gone) m.rect.remove();
+    for (const e of labels) e.style.opacity = "";
+  });
 }
 
 function focusTile(s, ramp) {
@@ -1236,7 +1341,10 @@ function niceTop(v) {
 
 const dateLabel = (d) => new Date(`${d}T00:00`).toLocaleDateString("en-US", PERIODS[state.period].daily ? { month: "short", day: "numeric" } : { month: "short", year: "2-digit" });
 
+let pastShown = { key: null };
+
 function drawPast() {
+  halt("past");
   const svg = document.getElementById("pastChart");
   const legend = document.getElementById("pastLegend");
   svg.textContent = "";
@@ -1245,7 +1353,10 @@ function drawPast() {
   pastTip.dataset.show = "false";
   document.getElementById("pastCaption").textContent = `Over time · by ${LEVEL_NAME[state.level].toLowerCase()}`
     + (state.path.length ? " · " + state.path.map((p) => p.label).join(" › ") : "");
-  if (!PAST.has(state.period)) return drawGhost(svg);
+  if (!PAST.has(state.period)) {
+    pastShown = { key: null };
+    return drawGhost(svg);
+  }
 
   const NS = "http://www.w3.org/2000/svg";
   const el = (tag, attrs) => {
@@ -1260,60 +1371,83 @@ function drawPast() {
   const totals = dates.map((_, i) => series.reduce((a, s) => a + s.values[i], 0));
   const top = share ? 1 : niceTop(Math.max(...totals, 1));
 
+  const key = [viewKey(), state.period, ...dates].join("|");
+  const prev = pastShown.key === key ? pastShown : null;
+  const lanes = mergeOrder(prev ? prev.series : [], series).map((s) => {
+    const gone = !series.includes(s);
+    const to = gone ? dates.map(() => 0) : s.values.map((v, i) => (share ? (totals[i] ? v / totals[i] : 0) : v));
+    const from = !prev ? to : gone ? s.shown : prev.series.find((p) => p.name === s.name)?.shown || dates.map(() => 0);
+    return { s, gone, from, to };
+  });
+  const topFrom = prev ? prev.top : top;
+  const moving = topFrom !== top || lanes.some((l) => l.to.some((v, i) => Math.abs(v - l.from[i]) > 1e-9));
+
   const W = svg.clientWidth || 800, H = 240, L = 60, R = 4, T = 8, B = 24;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  const y = (v) => T + (H - T - B) * (1 - v / top);
   const band = (W - L - R) / dates.length;
   const bw = Math.min(36, band * 0.62);
-
-  for (let k = 1; k <= 4; k++) {
-    svg.appendChild(el("line", { x1: L, x2: W - R, y1: y((top * k) / 4), y2: y((top * k) / 4), stroke: "var(--gridline)", "stroke-width": 1 }));
-  }
-  for (let k = 0; k <= 4; k++) {
-    const t = el("text", { x: L - 8, y: y((top * k) / 4), "text-anchor": "end", "dominant-baseline": "central", "font-size": 11, fill: "var(--text-muted)" });
-    t.textContent = share ? `${k * 25}%` : mask(compact.format((top * k) / 4));
-    svg.appendChild(t);
-  }
-
   const every = Math.ceil(52 / band);
-  dates.forEach((d, i) => {
-    const x = L + band * i;
-    const g = el("g", { class: "col", tabindex: 0 });
-    const hit = el("rect", { class: "col-hit", x, y: T, width: band, height: H - T - B, rx: 6 });
-    g.appendChild(hit);
-    const stack = series.filter((s) => s.values[i] > 0);
-    const label = i === dates.length - 1 && !PERIODS[state.period].ended ? "Now" : dateLabel(d);
-    let acc = 0;
-    stack.forEach((s, j) => {
-      const v = share ? s.values[i] / totals[i] : s.values[i];
-      const yb = y(acc) - (j ? 2 : 0), yt = y(acc + v);
-      acc += v;
-      if (yb - yt < 0.5) return;
-      const x0 = x + (band - bw) / 2, r = j === stack.length - 1 ? Math.min(4, (yb - yt) / 2) : 0;
-      const bar = el("path", {
-        class: "bar", fill: SLOTS[s.slot],
-        d: `M${x0} ${yb}V${yt + r}Q${x0} ${yt} ${x0 + r} ${yt}H${x0 + bw - r}Q${x0 + bw} ${yt} ${x0 + bw} ${yt + r}V${yb}Z`
-      });
-      bar.addEventListener("pointerenter", (ev) => { showPastTip(label, s, s.values[i], totals[i], ramp); place(ev.clientX + 14, ev.clientY + 14, pastTip); });
-      bar.addEventListener("pointermove", (ev) => place(ev.clientX + 14, ev.clientY + 14, pastTip));
-      bar.addEventListener("pointerleave", () => { pastTip.dataset.show = "false"; });
-      g.appendChild(bar);
-    });
-    g.setAttribute("aria-label", `${label}: ` + (state.private ? `${stack.length} series` : money.format(totals[i])));
-    hit.addEventListener("pointerenter", (ev) => { showPastTotal(label, totals[i]); place(ev.clientX + 14, ev.clientY + 14, pastTip); });
-    hit.addEventListener("pointermove", (ev) => place(ev.clientX + 14, ev.clientY + 14, pastTip));
-    hit.addEventListener("pointerleave", () => { pastTip.dataset.show = "false"; });
-    g.addEventListener("focus", () => { showPastTotal(label, totals[i]); const b = g.getBoundingClientRect(); place(b.right + 8, b.top + 20, pastTip); });
-    g.addEventListener("blur", () => { pastTip.dataset.show = "false"; });
-    svg.appendChild(g);
 
-    if ((dates.length - 1 - i) % every === 0) {
-      const t = el("text", { x: x + band / 2, y: H - B + 16, "text-anchor": "middle", "font-size": 11, fill: "var(--text-muted)" });
-      t.textContent = label;
-      svg.appendChild(t);
+  tween("past", moving, (t) => {
+    const now = lanes.map((l) => ({ ...l, v: l.from.map((f, i) => lerp(f, l.to[i], t)) }));
+    const scale = lerp(topFrom, top, t);
+    pastShown = { key, top: scale, series: now.filter((l) => l.v.some((v) => v > 0)).map((l) => ({ name: l.s.name, slot: l.s.slot, shown: l.v })) };
+    svg.textContent = "";
+    const y = (v) => T + (H - T - B) * (1 - v / scale);
+
+    for (let k = 1; k <= 4; k++) {
+      svg.appendChild(el("line", { x1: L, x2: W - R, y1: y((scale * k) / 4), y2: y((scale * k) / 4), stroke: "var(--gridline)", "stroke-width": 1 }));
     }
+    for (let k = 0; k <= 4; k++) {
+      const e = el("text", { x: L - 8, y: y((scale * k) / 4), "text-anchor": "end", "dominant-baseline": "central", "font-size": 11, fill: "var(--text-muted)" });
+      e.textContent = share ? `${k * 25}%` : mask(compact.format((top * k) / 4));
+      svg.appendChild(e);
+    }
+
+    dates.forEach((d, i) => {
+      const x = L + band * i;
+      const g = el("g", { class: "col", tabindex: 0 });
+      const hit = el("rect", { class: "col-hit", x, y: T, width: band, height: H - T - B, rx: 6 });
+      g.appendChild(hit);
+      const label = i === dates.length - 1 && !PERIODS[state.period].ended ? "Now" : dateLabel(d);
+      const bars = [];
+      let acc = 0;
+      now.filter((l) => l.v[i] > 0).forEach((l, j) => {
+        const yb = y(acc) - (j ? 2 : 0), yt = y(acc + l.v[i]);
+        acc += l.v[i];
+        if (yb - yt >= 0.5) bars.push({ l, yb, yt });
+      });
+      bars.forEach(({ l, yb, yt }, j) => {
+        const s = l.s;
+        const x0 = x + (band - bw) / 2, r = j === bars.length - 1 ? Math.min(4, (yb - yt) / 2) : 0;
+        const bar = el("path", {
+          class: "bar", fill: SLOTS[s.slot],
+          d: `M${x0} ${yb}V${yt + r}Q${x0} ${yt} ${x0 + r} ${yt}H${x0 + bw - r}Q${x0 + bw} ${yt} ${x0 + bw} ${yt + r}V${yb}Z`
+        });
+        if (!l.gone) {
+          bar.addEventListener("pointerenter", (ev) => { showPastTip(label, s, s.values[i], totals[i], ramp); place(ev.clientX + 14, ev.clientY + 14, pastTip); });
+          bar.addEventListener("pointermove", (ev) => place(ev.clientX + 14, ev.clientY + 14, pastTip));
+          bar.addEventListener("pointerleave", () => { pastTip.dataset.show = "false"; });
+        }
+        g.appendChild(bar);
+      });
+      const live = series.filter((s) => s.values[i] > 0).length;
+      g.setAttribute("aria-label", `${label}: ` + (state.private ? `${live} series` : money.format(totals[i])));
+      hit.addEventListener("pointerenter", (ev) => { showPastTotal(label, totals[i]); place(ev.clientX + 14, ev.clientY + 14, pastTip); });
+      hit.addEventListener("pointermove", (ev) => place(ev.clientX + 14, ev.clientY + 14, pastTip));
+      hit.addEventListener("pointerleave", () => { pastTip.dataset.show = "false"; });
+      g.addEventListener("focus", () => { showPastTotal(label, totals[i]); const b = g.getBoundingClientRect(); place(b.right + 8, b.top + 20, pastTip); });
+      g.addEventListener("blur", () => { pastTip.dataset.show = "false"; });
+      svg.appendChild(g);
+
+      if ((dates.length - 1 - i) % every === 0) {
+        const e = el("text", { x: x + band / 2, y: H - B + 16, "text-anchor": "middle", "font-size": 11, fill: "var(--text-muted)" });
+        e.textContent = label;
+        svg.appendChild(e);
+      }
+    });
+    svg.appendChild(el("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: "var(--baseline)", "stroke-width": 1 }));
   });
-  svg.appendChild(el("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: "var(--baseline)", "stroke-width": 1 }));
 
   const item = (name, slot, off, onClick) => {
     const b = document.createElement("button");
@@ -1785,7 +1919,7 @@ function render() {
   for (const g of document.querySelectorAll("[data-for]")) g.hidden = !g.dataset.for.split(" ").includes(state.tab);
   document.getElementById("donutBox").hidden = state.chart !== "donut";
   document.getElementById("treemapBox").hidden = state.chart !== "treemap";
-  drawDonut(segs, total);
+  drawDonut(segs);
   drawTreemap();
   renderLegend(segs, ramp, rows.filter((r) => r.excluded));
   renderTable(rows, total, ramp);
