@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/rtammekivi/sure-networth/compare/v0.7.0...v0.8.0) (2026-10-28)
+
+
+### Features
+
+* **web:** animate chart and exclusion changes ([06740cc](https://github.com/rtammekivi/sure-networth/commit/06740cc8359b15f5279b8f79064a360992325efd))
+* **web:** morph over-time chart across periods and ease breadcrumbs in ([36d21a1](https://github.com/rtammekivi/sure-networth/commit/36d21a1847f300f51ed4d6e2ea02cfba342a5fcc))
+
 ## [0.7.0](https://github.com/rtammekivi/sure-networth/compare/v0.6.0...v0.7.0) (2026-10-16)
 
 
