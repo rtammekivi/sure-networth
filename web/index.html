@@ -211,13 +211,13 @@
     margin-bottom: 12px; padding: 8px 12px; border-radius: 8px;
     background: var(--wash); font-size: 13px; color: var(--text-secondary);
   }
-  .excl {
+  .reveal {
     display: grid; grid-template-rows: 1fr;
     transition: grid-template-rows .38s cubic-bezier(.33, 1, .68, 1), opacity .38s ease, visibility .38s;
   }
-  .excl[hidden] { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; }
-  .excl > div { overflow: hidden; min-height: 0; }
-  @media (prefers-reduced-motion: reduce) { .excl { transition: none; } }
+  .reveal[hidden] { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; pointer-events: none; }
+  .reveal > div { overflow: hidden; min-height: 0; }
+  @media (prefers-reduced-motion: reduce) { .reveal { transition: none; } }
   .excl-bar button {
     appearance: none; border: 1px solid var(--border); background: var(--surface-1);
     border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 12px;
@@ -241,12 +241,21 @@
 
 
   .past-card { padding: 16px 16px 12px; }
-  .past-card svg { width: 100%; height: 240px; display: block; overflow: visible; transition: opacity .12s ease; }
+  .past-card svg { width: 100%; height: 240px; display: block; overflow: visible; transition: opacity .2s ease; }
+  .past-plot { position: relative; }
+  .past-plot.loading svg { opacity: .25; pointer-events: none; }
+  .past-spin {
+    position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px;
+    border: 3px solid var(--gridline); border-top-color: var(--text-secondary); border-radius: 50%;
+    opacity: 0; transition: opacity .2s ease; animation: spin .8s linear infinite; pointer-events: none;
+  }
+  .past-plot.loading .past-spin { opacity: 1; }
+  @keyframes spin { to { transform: rotate(1turn); } }
   .past-card .ghost { fill: var(--gridline); animation: ghost 1.4s ease-in-out infinite; }
   @keyframes ghost { 50% { opacity: .35; } }
   .sk { display: block; background: var(--gridline); border-radius: 6px; animation: ghost 1.4s ease-in-out infinite; }
   .sk-ring { fill: none; stroke: var(--gridline); stroke-width: 30; animation: ghost 1.4s ease-in-out infinite; }
-  @media (prefers-reduced-motion: reduce) { .past-card .ghost, .sk, .sk-ring { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .past-card .ghost, .sk, .sk-ring, .past-spin { animation: none; } }
   .skeleton[hidden] { display: none; }
   .sk-tabs { gap: 20px; padding: 10px 12px; }
   .sk-tab { width: 72px; height: 16px; }
@@ -456,9 +465,11 @@
     <div class="sub" id="heroSub"></div>
   </div>
 
-  <nav class="crumbs" id="crumbs" aria-label="Drill-down"></nav>
+  <div class="reveal" id="crumbsBox" hidden><div>
+    <nav class="crumbs" id="crumbs" aria-label="Drill-down"></nav>
+  </div></div>
 
-  <div class="excl" id="exclBar" hidden><div>
+  <div class="reveal" id="exclBar" hidden><div>
     <div class="excl-bar">
       <span id="exclText"></span>
       <button type="button" id="exclReset">Show all</button>
@@ -519,7 +530,10 @@
   <section class="past">
     <h2 id="pastCaption">Over time</h2>
     <div class="card past-card" id="pastCard">
-      <svg id="pastChart" role="img" aria-label="Allocation over time"></svg>
+      <div class="past-plot" id="pastPlot">
+        <svg id="pastChart" role="img" aria-label="Allocation over time"></svg>
+        <div class="past-spin" aria-hidden="true"></div>
+      </div>
       <div class="past-legend" id="pastLegend"></div>
       <p class="past-msg" id="pastMsg" role="status"></p>
       <p class="past-msg warn" id="pastWarn"></p>
@@ -1347,12 +1361,15 @@ function drawPast() {
   halt("past");
   const svg = document.getElementById("pastChart");
   const legend = document.getElementById("pastLegend");
-  svg.textContent = "";
   legend.textContent = "";
   document.getElementById("pastWarn").textContent = "";
   pastTip.dataset.show = "false";
   document.getElementById("pastCaption").textContent = `Over time · by ${LEVEL_NAME[state.level].toLowerCase()}`
     + (state.path.length ? " · " + state.path.map((p) => p.label).join(" › ") : "");
+  const stale = !PAST.has(state.period) && PAST_LOADING.has(state.period) && pastShown.key === viewKey();
+  document.getElementById("pastPlot").classList.toggle("loading", stale);
+  if (stale) return;
+  svg.textContent = "";
   if (!PAST.has(state.period)) {
     pastShown = { key: null };
     return drawGhost(svg);
@@ -1371,27 +1388,42 @@ function drawPast() {
   const totals = dates.map((_, i) => series.reduce((a, s) => a + s.values[i], 0));
   const top = share ? 1 : niceTop(Math.max(...totals, 1));
 
-  const key = [viewKey(), state.period, ...dates].join("|");
-  const prev = pastShown.key === key ? pastShown : null;
-  const lanes = mergeOrder(prev ? prev.series : [], series).map((s) => {
-    const gone = !series.includes(s);
-    const to = gone ? dates.map(() => 0) : s.values.map((v, i) => (share ? (totals[i] ? v / totals[i] : 0) : v));
-    const from = !prev ? to : gone ? s.shown : prev.series.find((p) => p.name === s.name)?.shown || dates.map(() => 0);
-    return { s, gone, from, to };
-  });
-  const topFrom = prev ? prev.top : top;
-  const moving = topFrom !== top || lanes.some((l) => l.to.some((v, i) => Math.abs(v - l.from[i]) > 1e-9));
-
   const W = svg.clientWidth || 800, H = 240, L = 60, R = 4, T = 8, B = 24;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const band = (W - L - R) / dates.length;
   const bw = Math.min(36, band * 0.62);
   const every = Math.ceil(52 / band);
+  const visible = svg.clientWidth > 0;
+
+  const key = viewKey();
+  const target = dates.map((_, i) => ({
+    x: L + band * i + (band - bw) / 2, bw,
+    vals: new Map(series.map((s) => [s.name, share ? (totals[i] ? s.values[i] / totals[i] : 0) : s.values[i]]))
+  }));
+  const prev = visible && pastShown.key === key && pastShown.cols.length && target.length
+    ? pastShown
+    : { top, series: [], cols: target.map((c) => ({ ...c, vals: new Map() })) };
+  const m = prev.cols.length, n = target.length;
+  const near = (i, from, to) => (from === 1 ? to - 1 : Math.round((i * (to - 1)) / (from - 1)));
+  const cols = target.map((to, i) => ({ i, from: prev.cols[near(i, n, m)], to }));
+  prev.cols.forEach((from, j) => {
+    if (!cols.some((c) => c.from === from)) cols.unshift({ i: null, from, to: target[near(j, m, n)] });
+  });
+  const lanes = mergeOrder(prev.series, series).map((s) => ({ name: s.name, slot: s.slot, s: series.includes(s) ? s : null }));
+  const moving = visible && (prev.top !== top || cols.some((c) => c.from.x !== c.to.x || c.from.bw !== c.to.bw
+    || lanes.some((l) => Math.abs((c.from.vals.get(l.name) || 0) - (c.to.vals.get(l.name) || 0)) > 1e-9)));
 
   tween("past", moving, (t) => {
-    const now = lanes.map((l) => ({ ...l, v: l.from.map((f, i) => lerp(f, l.to[i], t)) }));
-    const scale = lerp(topFrom, top, t);
-    pastShown = { key, top: scale, series: now.filter((l) => l.v.some((v) => v > 0)).map((l) => ({ name: l.s.name, slot: l.s.slot, shown: l.v })) };
+    const scale = lerp(prev.top, top, t);
+    const now = cols.filter((c) => t < 1 || c.i !== null).map((c) => ({
+      i: c.i, x: lerp(c.from.x, c.to.x, t), bw: lerp(c.from.bw, c.to.bw, t),
+      vals: new Map(lanes.map((l) => [l.name, lerp(c.from.vals.get(l.name) || 0, c.to.vals.get(l.name) || 0, t)]))
+    }));
+    pastShown = visible ? {
+      key, top: scale,
+      series: lanes.filter((l) => now.some((c) => c.vals.get(l.name) > 0)).map(({ name, slot }) => ({ name, slot })),
+      cols: now.filter((c) => c.i !== null)
+    } : { key: null };
     svg.textContent = "";
     const y = (v) => T + (H - T - B) * (1 - v / scale);
 
@@ -1404,33 +1436,36 @@ function drawPast() {
       svg.appendChild(e);
     }
 
-    dates.forEach((d, i) => {
-      const x = L + band * i;
-      const g = el("g", { class: "col", tabindex: 0 });
-      const hit = el("rect", { class: "col-hit", x, y: T, width: band, height: H - T - B, rx: 6 });
-      g.appendChild(hit);
-      const label = i === dates.length - 1 && !PERIODS[state.period].ended ? "Now" : dateLabel(d);
+    for (const c of now) {
+      const i = c.i;
+      const g = el("g", i === null ? {} : { class: "col", tabindex: 0 });
+      const label = i === null ? "" : i === dates.length - 1 && !PERIODS[state.period].ended ? "Now" : dateLabel(dates[i]);
+      const hit = i === null ? null : el("rect", { class: "col-hit", x: L + band * i, y: T, width: band, height: H - T - B, rx: 6 });
+      if (hit) g.appendChild(hit);
       const bars = [];
       let acc = 0;
-      now.filter((l) => l.v[i] > 0).forEach((l, j) => {
-        const yb = y(acc) - (j ? 2 : 0), yt = y(acc + l.v[i]);
-        acc += l.v[i];
+      lanes.filter((l) => c.vals.get(l.name) > 0).forEach((l, j) => {
+        const v = c.vals.get(l.name);
+        const yb = y(acc) - (j ? 2 : 0), yt = y(acc + v);
+        acc += v;
         if (yb - yt >= 0.5) bars.push({ l, yb, yt });
       });
       bars.forEach(({ l, yb, yt }, j) => {
-        const s = l.s;
-        const x0 = x + (band - bw) / 2, r = j === bars.length - 1 ? Math.min(4, (yb - yt) / 2) : 0;
+        const x0 = c.x, w = c.bw, r = j === bars.length - 1 ? Math.min(4, (yb - yt) / 2, w / 2) : 0;
         const bar = el("path", {
-          class: "bar", fill: SLOTS[s.slot],
-          d: `M${x0} ${yb}V${yt + r}Q${x0} ${yt} ${x0 + r} ${yt}H${x0 + bw - r}Q${x0 + bw} ${yt} ${x0 + bw} ${yt + r}V${yb}Z`
+          class: "bar", fill: SLOTS[l.slot],
+          d: `M${x0} ${yb}V${yt + r}Q${x0} ${yt} ${x0 + r} ${yt}H${x0 + w - r}Q${x0 + w} ${yt} ${x0 + w} ${yt + r}V${yb}Z`
         });
-        if (!l.gone) {
+        const s = l.s;
+        if (s && hit) {
           bar.addEventListener("pointerenter", (ev) => { showPastTip(label, s, s.values[i], totals[i], ramp); place(ev.clientX + 14, ev.clientY + 14, pastTip); });
           bar.addEventListener("pointermove", (ev) => place(ev.clientX + 14, ev.clientY + 14, pastTip));
           bar.addEventListener("pointerleave", () => { pastTip.dataset.show = "false"; });
         }
         g.appendChild(bar);
       });
+      svg.appendChild(g);
+      if (!hit) continue;
       const live = series.filter((s) => s.values[i] > 0).length;
       g.setAttribute("aria-label", `${label}: ` + (state.private ? `${live} series` : money.format(totals[i])));
       hit.addEventListener("pointerenter", (ev) => { showPastTotal(label, totals[i]); place(ev.clientX + 14, ev.clientY + 14, pastTip); });
@@ -1438,14 +1473,13 @@ function drawPast() {
       hit.addEventListener("pointerleave", () => { pastTip.dataset.show = "false"; });
       g.addEventListener("focus", () => { showPastTotal(label, totals[i]); const b = g.getBoundingClientRect(); place(b.right + 8, b.top + 20, pastTip); });
       g.addEventListener("blur", () => { pastTip.dataset.show = "false"; });
-      svg.appendChild(g);
 
       if ((dates.length - 1 - i) % every === 0) {
-        const e = el("text", { x: x + band / 2, y: H - B + 16, "text-anchor": "middle", "font-size": 11, fill: "var(--text-muted)" });
+        const e = el("text", { x: L + band * i + band / 2, y: H - B + 16, "text-anchor": "middle", "font-size": 11, fill: "var(--text-muted)" });
         e.textContent = label;
         svg.appendChild(e);
       }
-    });
+    }
     svg.appendChild(el("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: "var(--baseline)", "stroke-width": 1 }));
   });
 
@@ -1690,9 +1724,10 @@ function renderCenter() {
 
 function renderCrumbs() {
   const nav = document.getElementById("crumbs");
+  const box = document.getElementById("crumbsBox");
+  box.hidden = state.path.length === 0;
+  if (box.hidden) return;
   nav.textContent = "";
-  nav.hidden = state.path.length === 0;
-  if (nav.hidden) return;
   const mk = (label, onClick, current) => {
     if (current) {
       const s = document.createElement("span");
